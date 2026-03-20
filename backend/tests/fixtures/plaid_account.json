@@ -1,0 +1,7 @@
+{
+  "account_id": "plaid-account-1",
+  "name": "Everyday Checking",
+  "mask": "1234",
+  "subtype": "checking",
+  "balances": {"available": 1580.25, "current": 1600.25}
+}

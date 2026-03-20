@@ -1,0 +1,7 @@
+{
+  "id": "ms-todo-1",
+  "title": "Pick up bread",
+  "status": "notStarted",
+  "list_name": "Groceries",
+  "dueDateTime": {"dateTime": "2026-03-17T18:00:00.0000000", "timeZone": "UTC"}
+}

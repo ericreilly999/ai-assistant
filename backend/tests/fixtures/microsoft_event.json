@@ -1,0 +1,10 @@
+{
+  "id": "ms-event-1",
+  "subject": "Architecture review",
+  "bodyPreview": "Review the ECS migration plan",
+  "isReminderOn": true,
+  "reminderMinutesBeforeStart": 10,
+  "start": {"dateTime": "2026-03-17T15:00:00-04:00", "timeZone": "Eastern Standard Time"},
+  "end": {"dateTime": "2026-03-17T16:00:00-04:00", "timeZone": "Eastern Standard Time"},
+  "location": {"displayName": "Conference Room"}
+}

@@ -1,0 +1,14 @@
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.zip
+*.pyc
+__pycache__/
+.pytest_cache/
+backend/.coverage
+backend/build/
+dist/
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
