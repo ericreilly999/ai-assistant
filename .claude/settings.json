@@ -1,5 +1,14 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git branch *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(pytest *)"
+    ]
   }
 }
