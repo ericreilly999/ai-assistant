@@ -1,7 +1,7 @@
 import { ActionProposal, ExecuteResponse, PlanResponse } from "../types";
 
 const environment = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
-const apiBaseUrl = environment.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
+const apiBaseUrl = environment.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
 
 async function postJson<T>(path: string, payload: Record<string, unknown>): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
