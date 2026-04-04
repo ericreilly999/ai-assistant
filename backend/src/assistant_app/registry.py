@@ -26,13 +26,20 @@ class ProviderRegistry:
     def providers(self) -> list[str]:
         return list(self._adapters.keys())
 
-    def integration_status(self) -> list[dict[str, object]]:
+    def integration_status(
+        self,
+        provider_secret_status: dict | None = None,
+        secret_source: str = "environment",
+    ) -> list[dict[str, object]]:
+        secret_status = provider_secret_status or {}
         return [
             {
                 "provider": name,
                 "display_name": adapter.display_name,
                 "capabilities": list(adapter.capabilities),
                 "mock_mode": self.mock_mode,
+                "secrets_configured": secret_status.get(name, secret_status.get(name.split("_")[0], False)),
+                "secret_source": secret_source,
             }
             for name, adapter in self._adapters.items()
         ]

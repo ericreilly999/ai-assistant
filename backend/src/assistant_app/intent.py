@@ -14,6 +14,12 @@ WRITE_HINTS = (
     "cancel",
     "plan",
     "remind",
+    "complete",
+    "finish",
+    "done",
+    "check off",
+    "rename",
+    "edit",
 )
 
 
@@ -36,6 +42,8 @@ def classify_message(message: str) -> IntentClassification:
         return IntentClassification("travel", "write" if requires_confirmation else "read", requires_confirmation)
     if any(token in normalized for token in ("calendar", "schedule", "day look like", "tomorrow", "today", "event", "reminder")):
         return IntentClassification("calendar", "write" if requires_confirmation else "read", requires_confirmation)
+    if any(token in normalized for token in ("task", "tasks", "todo", "to-do", "to do")):
+        return IntentClassification("tasks", "write" if requires_confirmation else "read", requires_confirmation)
     return IntentClassification("general", "write" if requires_confirmation else "read", requires_confirmation)
 
 

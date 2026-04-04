@@ -23,3 +23,24 @@ class GoogleTasksAdapter:
             list_name=payload.get("list_name", "Tasks"),
             due=payload.get("due"),
         )
+
+    def normalize_update_task_payload(self, task_id: str, updates: dict) -> dict:
+        """Convert a user-friendly updates dict to a Google Tasks API patch body."""
+        body: dict = {}
+        if "title" in updates:
+            body["title"] = updates["title"]
+        if "due" in updates:
+            body["due"] = updates["due"]
+        if "notes" in updates:
+            body["notes"] = updates["notes"]
+        if "status" in updates:
+            body["status"] = updates["status"]
+        return body
+
+    def update_task(self, list_id: str, task_id: str, updates: dict) -> dict:
+        """Return a normalized patch body for a Google Tasks update (caller does HTTP)."""
+        return self.normalize_update_task_payload(task_id, updates)
+
+    def complete_task(self, list_id: str, task_id: str) -> dict:
+        """Return a normalized patch body to mark a task completed (caller does HTTP)."""
+        return {"status": "completed", "hidden": True}
