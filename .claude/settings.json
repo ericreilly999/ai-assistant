@@ -1,17 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
-    "allow": [
-      "Bash(*)",
-      "Write",
-      "Edit",
-      "Read",
-      "Glob",
-      "Grep",
-      "WebFetch",
-      "WebSearch",
-      "TodoWrite",
-      "Agent"
-    ]
+    "defaultMode": "bypassPermissions"
   }
 }
