@@ -5,7 +5,13 @@
       "Bash(*)",
       "Write",
       "Edit",
-      "Read"
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "TodoWrite",
+      "Agent"
     ]
   }
 }

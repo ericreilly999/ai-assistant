@@ -1,0 +1,132 @@
+name: Deploy to Dev
+
+on:
+  push:
+    branches:
+      - main
+
+# Prevent concurrent deploys to the same environment
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  # ── CI gate ────────────────────────────────────────────────────────────────
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run backend unit tests
+        run: |
+          PYTHONPATH=backend/src python -m unittest discover -s backend/tests -t backend
+
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install mobile dependencies
+        run: npm ci
+      - name: Typecheck mobile app
+        run: npm run typecheck
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform
+      - name: Initialize (no backend)
+        run: terraform -chdir=terraform/environments/dev init -backend=false
+      - name: Validate
+        run: terraform -chdir=terraform/environments/dev validate
+
+  # ── Deploy ─────────────────────────────────────────────────────────────────
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, mobile-typecheck, terraform-validate]
+    environment: dev
+    permissions:
+      id-token: write   # required for OIDC
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Configure AWS credentials via OIDC (no long-lived keys).
+      # Prerequisites:
+      #   1. Create an IAM OIDC provider for token.actions.githubusercontent.com
+      #   2. Create an IAM role trusted by the OIDC provider with the repo condition:
+      #        repo:<org>/<repo>:ref:refs/heads/main
+      #   3. Attach a policy granting Lambda, API Gateway, Cognito, Secrets Manager,
+      #      CloudWatch, IAM (scoped), and S3 (tfstate bucket) permissions.
+      #   4. Set the GitHub secret AWS_DEPLOY_ROLE_ARN to the role ARN.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      # Build the Lambda deployment package the same way package-lambda.ps1 does.
+      - name: Build Lambda package
+        run: |
+          mkdir -p terraform/environments/dev/build
+          cd backend/src
+          zip -r ../../terraform/environments/dev/build/orchestrator.zip .
+
+      # Write a tfvars file from GitHub secrets / variables.
+      # Add the corresponding secrets/vars to the GitHub "dev" environment:
+      #   Required secrets:
+      #     TF_BACKEND_BUCKET  — S3 bucket name for Terraform state
+      #   Optional vars (fall back to safe defaults):
+      #     AWS_REGION, TF_CORS_ORIGINS, TF_CALLBACK_URLS, TF_LOGOUT_URLS,
+      #     TF_BEDROCK_MODEL_ID, TF_BEDROCK_GUARDRAIL_ID
+      - name: Write terraform.tfvars
+        run: |
+          cat > terraform/environments/dev/terraform.tfvars <<EOF
+          environment            = "dev"
+          aws_region             = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          mock_provider_mode     = true
+          cors_allow_origins     = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
+          bedrock_router_model_id    = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
+          bedrock_guardrail_id       = "${{ vars.TF_BEDROCK_GUARDRAIL_ID || 'replace-me' }}"
+          bedrock_guardrail_version  = "DRAFT"
+          callback_urls          = [${{ vars.TF_CALLBACK_URLS || '' }}]
+          logout_urls            = [${{ vars.TF_LOGOUT_URLS || '' }}]
+          EOF
+
+      - name: Write backend config
+        run: |
+          cat > terraform/environments/dev/backend.hcl <<EOF
+          bucket       = "${{ secrets.TF_BACKEND_BUCKET }}"
+          key          = "ai-assistant/dev/terraform.tfstate"
+          region       = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          use_lockfile = true
+          encrypt      = true
+          EOF
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/environments/dev init -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform -chdir=terraform/environments/dev plan -var-file=terraform.tfvars -out=tfplan
+
+      - name: Terraform apply
+        run: terraform -chdir=terraform/environments/dev apply -auto-approve tfplan
