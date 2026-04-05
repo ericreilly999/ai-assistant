@@ -113,11 +113,10 @@ jobs:
       - name: Write backend config
         run: |
           cat > terraform/environments/dev/backend.hcl <<EOF
-          bucket       = "${{ secrets.TF_BACKEND_BUCKET }}"
-          key          = "ai-assistant/dev/terraform.tfstate"
-          region       = "${{ vars.AWS_REGION || 'us-east-1' }}"
-          use_lockfile = true
-          encrypt      = true
+          bucket  = "${{ secrets.TF_BACKEND_BUCKET }}"
+          key     = "ai-assistant/dev/terraform.tfstate"
+          region  = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          encrypt = true
           EOF
 
       - name: Terraform init
