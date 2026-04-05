@@ -22,16 +22,6 @@ variable "bedrock_router_model_id" {
   default = "us.amazon.nova-pro-v1:0"
 }
 
-variable "bedrock_guardrail_id" {
-  type    = string
-  default = "replace-me"
-}
-
-variable "bedrock_guardrail_version" {
-  type    = string
-  default = "DRAFT"
-}
-
 variable "callback_urls" {
   type    = list(string)
   default = []

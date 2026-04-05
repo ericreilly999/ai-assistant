@@ -3,7 +3,5 @@ aws_region  = \"us-east-1\"
 mock_provider_mode = false
 cors_allow_origins = [\"https://your-prod-domain.com\"]
 bedrock_router_model_id = \"us.amazon.nova-pro-v1:0\"
-bedrock_guardrail_id = \"replace-me\"
-bedrock_guardrail_version = \"DRAFT\"
 callback_urls = []
 logout_urls = []

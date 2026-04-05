@@ -4,11 +4,11 @@ resource "aws_cognito_user_pool" "this" {
   username_attributes      = ["email"]
 
   password_policy {
-    minimum_length    = 12
-    require_lowercase = true
-    require_numbers   = true
-    require_symbols   = true
-    require_uppercase = true
+    minimum_length                   = 12
+    require_lowercase                = true
+    require_numbers                  = true
+    require_symbols                  = true
+    require_uppercase                = true
     temporary_password_validity_days = 7
   }
 

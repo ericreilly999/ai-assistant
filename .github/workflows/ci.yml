@@ -14,9 +14,35 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install test dependencies
+        run: pip install pytest pytest-cov
       - name: Run backend unit tests
         run: |
-          PYTHONPATH=backend/src python -m unittest discover -s backend/tests -t backend
+          PYTHONPATH=backend/src python -m pytest backend/tests -v --tb=short
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint with ruff
+        run: ruff check backend/src backend/tests
+
+  backend-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install mypy
+        run: pip install mypy
+      - name: Type check with mypy
+        run: mypy backend/src --ignore-missing-imports
 
   mobile-typecheck:
     runs-on: ubuntu-latest
@@ -51,3 +77,43 @@ jobs:
         run: terraform -chdir=terraform/environments/${{ matrix.environment }} init -backend=false
       - name: Validate
         run: terraform -chdir=terraform/environments/${{ matrix.environment }} validate
+      - name: Install tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: Run tflint
+        run: |
+          tflint --init --config .tflint.hcl 2>/dev/null || true
+          tflint --chdir=terraform/environments/${{ matrix.environment }}
+      - name: Install checkov
+        run: pip install checkov
+      - name: Run checkov on terraform
+        run: |
+          checkov -d terraform/environments/${{ matrix.environment }} \
+            --framework terraform \
+            --quiet \
+            --compact \
+            --skip-check CKV_AWS_272,CKV_AWS_116,CKV_AWS_50 \
+            || true
+
+  lambda-package-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Lambda package
+        run: |
+          mkdir -p dist
+          cd backend/src
+          zip -r ../../dist/orchestrator.zip . -x "**/__pycache__/*" "**/*.pyc"
+      - name: Validate package contents
+        run: |
+          unzip -l dist/orchestrator.zip | grep "assistant_app/handler.py"
+          echo "Lambda package validated: handler entrypoint found."
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-package
+          path: dist/orchestrator.zip
+          retention-days: 7

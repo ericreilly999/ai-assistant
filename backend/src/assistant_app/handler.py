@@ -135,8 +135,8 @@ def build_handler(
 
             if method == "POST" and path == "/v1/chat/execute":
                 body = _load_json_body(event)
-                result = orchestrator.execute(body)
-                return json_response(200, result.to_dict())
+                exec_result = orchestrator.execute(body)
+                return json_response(200, exec_result.to_dict())
         except ValueError as exc:
             return json_response(400, {"message": str(exc)})
         except HttpRequestError as exc:
@@ -170,7 +170,7 @@ def _resolve_query_params(event: dict[str, Any]) -> dict[str, str]:
 
     raw_query = event.get("rawQueryString")
     if raw_query:
-        return {key: value for key, value in parse_qsl(raw_query, keep_blank_values=True)}
+        return dict(parse_qsl(raw_query, keep_blank_values=True))
     return {}
 
 

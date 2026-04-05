@@ -26,3 +26,13 @@ export type ExecuteResponse = {
   receipt: Record<string, unknown>;
   resource: Record<string, unknown>;
 };
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  proposals?: ActionProposal[];
+  sources?: Array<Record<string, string>>;
+  warnings?: string[];
+  isError?: boolean;
+};

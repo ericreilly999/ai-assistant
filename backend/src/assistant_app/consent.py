@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from assistant_app.models import ActionProposal
@@ -17,6 +17,64 @@ def payload_hash(payload: dict[str, Any]) -> str:
     return digest.hexdigest()
 
 
+_HIGH_RISK_ACTION_TYPES = {
+    "delete_event",
+    "delete_task",
+    "cancel_event",
+    "bulk_delete",
+}
+
+_MEDIUM_RISK_ACTION_TYPES = {
+    "create_calendar_event",
+    "update_task",
+    "complete_task",
+    "upsert_grocery_items",
+}
+
+_HIGH_RISK_MESSAGE_TOKENS = (
+    "delete",
+    "remove",
+    "cancel all",
+    "clear",
+    "wipe",
+    "drop",
+)
+
+_MEDIUM_RISK_MESSAGE_TOKENS = (
+    "update",
+    "change",
+    "reschedule",
+    "move",
+    "edit",
+    "rename",
+)
+
+
+def classify_risk_level(action_type: str, payload: dict[str, Any], message: str = "") -> str:
+    """Classify the risk level of a proposed action.
+
+    Returns 'high', 'medium', or 'low'.
+    """
+    if action_type in _HIGH_RISK_ACTION_TYPES:
+        return "high"
+
+    normalized_message = message.strip().lower()
+    if any(token in normalized_message for token in _HIGH_RISK_MESSAGE_TOKENS):
+        return "high"
+
+    items = payload.get("items") or []
+    if isinstance(items, list) and len(items) > 10:
+        return "medium"
+
+    if action_type in _MEDIUM_RISK_ACTION_TYPES:
+        return "medium"
+
+    if any(token in normalized_message for token in _MEDIUM_RISK_MESSAGE_TOKENS):
+        return "medium"
+
+    return "low"
+
+
 def build_action_proposal(
     provider: str,
     action_type: str,
@@ -25,12 +83,14 @@ def build_action_proposal(
     summary: str,
     ttl_minutes: int,
     now: datetime | None = None,
+    message: str = "",
 ) -> ActionProposal:
-    issued_at = now or datetime.now(timezone.utc)
+    issued_at = now or datetime.now(UTC)
     hashed_payload = payload_hash(payload)
     proposal_id_seed = f"{provider}:{action_type}:{hashed_payload}:{issued_at.isoformat()}"
     proposal_id = hashlib.sha1(proposal_id_seed.encode("utf-8")).hexdigest()[:16]
     expires_at = issued_at + timedelta(minutes=ttl_minutes)
+    risk = classify_risk_level(action_type, payload, message)
 
     return ActionProposal(
         proposal_id=proposal_id,
@@ -40,14 +100,14 @@ def build_action_proposal(
         payload=payload,
         payload_hash=hashed_payload,
         summary=summary,
-        risk_level="low",
+        risk_level=risk,
         requires_confirmation=True,
         expires_at=expires_at.isoformat(),
     )
 
 
 def validate_execute_request(request_payload: dict[str, Any], now: datetime | None = None) -> tuple[bool, str]:
-    current_time = now or datetime.now(timezone.utc)
+    current_time = now or datetime.now(UTC)
 
     if request_payload.get("approved") is not True:
         return False, "Explicit approval is required before executing a write."
