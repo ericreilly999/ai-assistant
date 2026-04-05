@@ -68,7 +68,12 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${local.repo}:ref:refs/heads/main"]
+      values = [
+        # Jobs with environment: <env> (e.g. deploy-dev uses environment: dev)
+        "repo:${local.repo}:environment:*",
+        # Jobs without environment (e.g. plan-only, CI on main)
+        "repo:${local.repo}:ref:refs/heads/main",
+      ]
     }
   }
 }
@@ -103,6 +108,7 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "lambda:GetPolicy",
       "lambda:TagResource",
       "lambda:UntagResource",
+      "lambda:ListTags",
     ]
     resources = ["arn:aws:lambda:*:${data.aws_caller_identity.current.account_id}:function:ai-assistant-*"]
   }
@@ -136,6 +142,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "cognito-idp:GetUserPoolMfaConfig",
       "cognito-idp:SetUserPoolMfaConfig",
       "cognito-idp:TagResource",
+      "cognito-idp:UntagResource",
+      "cognito-idp:ListTagsForResource",
     ]
     resources = ["arn:aws:cognito-idp:*:${data.aws_caller_identity.current.account_id}:userpool/*"]
   }
@@ -215,12 +223,15 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "bedrock:UpdateGuardrail",
       "bedrock:DeleteGuardrail",
       "bedrock:GetGuardrail",
+      "bedrock:ListGuardrails",
       "bedrock:CreateGuardrailVersion",
       "bedrock:DeleteGuardrailVersion",
       "bedrock:ApplyGuardrail",
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
       "bedrock:TagResource",
+      "bedrock:UntagResource",
+      "bedrock:ListTagsForResource",
     ]
     resources = ["*"]
   }
