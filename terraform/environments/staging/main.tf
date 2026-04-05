@@ -63,6 +63,7 @@ module "lambda" {
   timeout                = 30
   memory_size            = 512
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
+  has_additional_policy  = true
   environment_variables = {
     APP_ENV                    = var.environment
     LOG_LEVEL                  = "INFO"

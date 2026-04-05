@@ -38,6 +38,12 @@ variable "additional_policy_json" {
   default = ""
 }
 
+variable "has_additional_policy" {
+  description = "Set to true when additional_policy_json is provided."
+  type        = bool
+  default     = false
+}
+
 variable "managed_policy_arns" {
   type    = set(string)
   default = []
