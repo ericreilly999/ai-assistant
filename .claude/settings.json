@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/branch-policy.sh",
+            "command": "python3 /home/user/ai-assistant/.claude/hooks/branch-policy.sh",
             "timeout": 10,
             "statusMessage": "Checking branch policy..."
           }

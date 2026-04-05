@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from assistant_app.bedrock_client import BedrockConverseRouter, BedrockGuardrail
 from assistant_app.config import AppConfig
@@ -24,7 +26,7 @@ class AssistantOrchestrator:
         self,
         config: AppConfig,
         registry: ProviderRegistry,
-        live_service: "LocalIntegrationService | None" = None,
+        live_service: LocalIntegrationService | None = None,
     ) -> None:
         self.config = config
         self.registry = registry
@@ -128,7 +130,7 @@ class AssistantOrchestrator:
                 resource = payload
 
             receipt = {
-                "executed_at": datetime.now(timezone.utc).isoformat(),
+                "executed_at": datetime.now(UTC).isoformat(),
                 "mode": mode,
                 "proposal_id": request_payload.get("proposal_id", "unspecified"),
             }
@@ -185,15 +187,13 @@ class AssistantOrchestrator:
                 task_id = payload["task_id"]
                 return self._live.complete_microsoft_task(list_id, task_id)
 
-        if provider == "google_calendar":
-            if action_type == "create_calendar_event":
-                result = self._live.create_google_calendar_event(payload)
-                return result.get("event", payload)
+        if provider == "google_calendar" and action_type == "create_calendar_event":
+            result = self._live.create_google_calendar_event(payload)
+            return result.get("event", payload)
 
-        if provider == "microsoft_calendar":
-            if action_type == "create_calendar_event":
-                result = self._live.create_microsoft_calendar_event(payload)
-                return result.get("event", payload)
+        if provider == "microsoft_calendar" and action_type == "create_calendar_event":
+            result = self._live.create_microsoft_calendar_event(payload)
+            return result.get("event", payload)
 
         raise ValueError(f"No live handler for provider={provider} action_type={action_type}.")
 
@@ -240,7 +240,7 @@ class AssistantOrchestrator:
             try:
                 from datetime import timedelta
 
-                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+                tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
                 day_end = tomorrow.replace(hour=23, minute=59, second=59)
@@ -249,10 +249,8 @@ class AssistantOrchestrator:
                 )
                 adapter = self.registry.get("google_calendar")
                 for item in raw.get("events", []):
-                    try:
+                    with contextlib.suppress(Exception):
                         events.append(adapter.normalize_event(item))
-                    except Exception:
-                        pass
                 sources.append({"provider": "google_calendar", "type": "calendar"})
             except Exception as exc:
                 logger.warning("google_calendar live fetch failed: %s", exc)
@@ -261,7 +259,7 @@ class AssistantOrchestrator:
             try:
                 from datetime import timedelta
 
-                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+                tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
                 day_end = tomorrow.replace(hour=23, minute=59, second=59)
@@ -270,10 +268,8 @@ class AssistantOrchestrator:
                 )
                 adapter = self.registry.get("microsoft_calendar")
                 for item in raw.get("events", []):
-                    try:
+                    with contextlib.suppress(Exception):
                         events.append(adapter.normalize_event(item))
-                    except Exception:
-                        pass
                 sources.append({"provider": "microsoft_calendar", "type": "calendar"})
             except Exception as exc:
                 logger.warning("microsoft_calendar live fetch failed: %s", exc)
@@ -421,6 +417,7 @@ class AssistantOrchestrator:
         task_provider = self._preferred_task_provider(provider_names)
         normalized = message.lower()
 
+        payload: dict[str, Any]
         if any(token in normalized for token in ("complete", "finish", "done", "check off")):
             action_type = "complete_task"
             summary = "Mark a task as complete."
@@ -445,7 +442,7 @@ class AssistantOrchestrator:
         )
         return PlanResult(
             intent="tasks",
-            message=f"I prepared a task-update proposal. Review and approve it before any write occurs.",
+            message="I prepared a task-update proposal. Review and approve it before any write occurs.",
             proposals=[proposal],
             sources=[{"provider": task_provider, "type": "task_list"}],
             warnings=self._warnings(),

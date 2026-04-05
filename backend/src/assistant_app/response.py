@@ -4,7 +4,6 @@ import json
 import os
 from typing import Any
 
-
 _cors_origin = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
 
 CORS_HEADERS = {

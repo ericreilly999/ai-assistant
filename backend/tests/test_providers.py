@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from assistant_app.providers.google_calendar import GoogleCalendarAdapter
 from assistant_app.providers.google_drive import GoogleDriveAdapter
@@ -10,7 +10,6 @@ from assistant_app.providers.google_tasks import GoogleTasksAdapter
 from assistant_app.providers.microsoft_calendar import MicrosoftCalendarAdapter
 from assistant_app.providers.microsoft_todo import MicrosoftToDoAdapter
 from assistant_app.providers.plaid import PlaidAdapter
-
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 

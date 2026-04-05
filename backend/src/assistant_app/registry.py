@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from assistant_app.providers.google_calendar import GoogleCalendarAdapter
 from assistant_app.providers.google_drive import GoogleDriveAdapter
 from assistant_app.providers.google_tasks import GoogleTasksAdapter
@@ -11,7 +13,7 @@ from assistant_app.providers.plaid import PlaidAdapter
 class ProviderRegistry:
     def __init__(self, mock_mode: bool = True) -> None:
         self.mock_mode = mock_mode
-        self._adapters = {
+        self._adapters: dict[str, Any] = {
             GoogleCalendarAdapter.key: GoogleCalendarAdapter(),
             GoogleTasksAdapter.key: GoogleTasksAdapter(),
             GoogleDriveAdapter.key: GoogleDriveAdapter(),

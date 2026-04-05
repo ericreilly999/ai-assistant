@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -66,7 +66,7 @@ class AppConfig:
     provider_secret_status: dict = field(default_factory=dict)
 
     @classmethod
-    def from_env(cls) -> "AppConfig":
+    def from_env(cls) -> AppConfig:
         local_env_file = os.getenv("LOCAL_ENV_FILE", "backend/.env.local")
         if os.path.exists(local_env_file):
             _load_local_env(local_env_file)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from assistant_app.models import ActionProposal
@@ -85,7 +85,7 @@ def build_action_proposal(
     now: datetime | None = None,
     message: str = "",
 ) -> ActionProposal:
-    issued_at = now or datetime.now(timezone.utc)
+    issued_at = now or datetime.now(UTC)
     hashed_payload = payload_hash(payload)
     proposal_id_seed = f"{provider}:{action_type}:{hashed_payload}:{issued_at.isoformat()}"
     proposal_id = hashlib.sha1(proposal_id_seed.encode("utf-8")).hexdigest()[:16]
@@ -107,7 +107,7 @@ def build_action_proposal(
 
 
 def validate_execute_request(request_payload: dict[str, Any], now: datetime | None = None) -> tuple[bool, str]:
-    current_time = now or datetime.now(timezone.utc)
+    current_time = now or datetime.now(UTC)
 
     if request_payload.get("approved") is not True:
         return False, "Explicit approval is required before executing a write."

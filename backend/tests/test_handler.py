@@ -10,16 +10,16 @@ from assistant_app.registry import ProviderRegistry
 
 
 def _make_config(**overrides):
-    defaults = dict(
-        app_env="dev",
-        log_level="INFO",
-        mock_provider_mode=True,
-        proposal_ttl_minutes=15,
-        default_timezone="America/New_York",
-        bedrock_router_model_id="mock-router",
-        bedrock_guardrail_id="mock-guardrail",
-        bedrock_guardrail_version="DRAFT",
-    )
+    defaults = {
+        "app_env": "dev",
+        "log_level": "INFO",
+        "mock_provider_mode": True,
+        "proposal_ttl_minutes": 15,
+        "default_timezone": "America/New_York",
+        "bedrock_router_model_id": "mock-router",
+        "bedrock_guardrail_id": "mock-guardrail",
+        "bedrock_guardrail_version": "DRAFT",
+    }
     defaults.update(overrides)
     return AppConfig(**defaults)
 
@@ -216,8 +216,9 @@ class HandlerTests(unittest.TestCase):
         # HttpRequestError with status_code propagates to 502 by default
         # This is tested indirectly via the handler's except clause
         # (direct unit test; no live network call needed)
-        from assistant_app.http_client import HttpRequestError
         from unittest.mock import patch
+
+        from assistant_app.http_client import HttpRequestError
 
         with patch(
             "assistant_app.orchestrator.AssistantOrchestrator.execute",

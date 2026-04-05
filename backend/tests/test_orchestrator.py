@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import UTC
 
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
@@ -9,16 +10,16 @@ from assistant_app.registry import ProviderRegistry
 
 
 def _make_config(**overrides):
-    defaults = dict(
-        app_env="dev",
-        log_level="INFO",
-        mock_provider_mode=True,
-        proposal_ttl_minutes=15,
-        default_timezone="America/New_York",
-        bedrock_router_model_id="mock-router",
-        bedrock_guardrail_id="mock-guardrail",
-        bedrock_guardrail_version="DRAFT",
-    )
+    defaults = {
+        "app_env": "dev",
+        "log_level": "INFO",
+        "mock_provider_mode": True,
+        "proposal_ttl_minutes": 15,
+        "default_timezone": "America/New_York",
+        "bedrock_router_model_id": "mock-router",
+        "bedrock_guardrail_id": "mock-guardrail",
+        "bedrock_guardrail_version": "DRAFT",
+    }
     defaults.update(overrides)
     return AppConfig(**defaults)
 
@@ -121,13 +122,13 @@ class OrchestratorExecuteTests(unittest.TestCase):
         self.assertIn("approval", str(ctx.exception))
 
     def test_execute_rejects_expired_proposal(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from assistant_app.consent import build_action_proposal
 
         payload = {"list_name": "Groceries", "items": ["milk"]}
-        from datetime import timedelta
 
-        past = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        past = datetime(2020, 1, 1, tzinfo=UTC)
         proposal = build_action_proposal(
             provider="google_tasks",
             action_type="upsert_grocery_items",

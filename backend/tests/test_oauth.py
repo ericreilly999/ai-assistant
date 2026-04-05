@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from assistant_app.config import AppConfig
 from assistant_app.live_service import LocalIntegrationService
@@ -11,16 +11,16 @@ from assistant_app.registry import ProviderRegistry
 
 
 def _make_config(**overrides):
-    defaults = dict(
-        app_env="dev",
-        log_level="INFO",
-        mock_provider_mode=True,
-        proposal_ttl_minutes=15,
-        default_timezone="America/New_York",
-        bedrock_router_model_id="mock-router",
-        bedrock_guardrail_id="mock-guardrail",
-        bedrock_guardrail_version="DRAFT",
-    )
+    defaults = {
+        "app_env": "dev",
+        "log_level": "INFO",
+        "mock_provider_mode": True,
+        "proposal_ttl_minutes": 15,
+        "default_timezone": "America/New_York",
+        "bedrock_router_model_id": "mock-router",
+        "bedrock_guardrail_id": "mock-guardrail",
+        "bedrock_guardrail_version": "DRAFT",
+    }
     defaults.update(overrides)
     return AppConfig(**defaults)
 
@@ -147,9 +147,8 @@ class MicrosoftOAuthTests(unittest.TestCase):
         with patch(
             "assistant_app.live_service.http_post_form",
             side_effect=ValueError("exchange failed"),
-        ):
-            with self.assertRaises(ValueError):
-                self.service.complete_microsoft_auth("bad-code", "state-xyz")
+        ), self.assertRaises(ValueError):
+            self.service.complete_microsoft_auth("bad-code", "state-xyz")
         self.assertIsNone(self.service._store.get_tokens("microsoft"))
 
 
