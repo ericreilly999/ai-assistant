@@ -13,7 +13,3 @@ output "guardrail_version" {
   value       = aws_bedrock_guardrail_version.this.version
 }
 
-output "router_prompt_arn" {
-  description = "ARN of the Bedrock managed router prompt."
-  value       = aws_bedrock_prompt.router.arn
-}

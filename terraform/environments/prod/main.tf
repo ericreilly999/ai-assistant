@@ -30,10 +30,9 @@ module "secrets" {
 }
 
 module "bedrock" {
-  source          = "../../modules/bedrock_ai_config"
-  name_prefix     = local.name_prefix
-  router_model_id = var.bedrock_router_model_id
-  tags            = local.tags
+  source      = "../../modules/bedrock_ai_config"
+  name_prefix = local.name_prefix
+  tags        = local.tags
 }
 
 data "aws_iam_policy_document" "lambda_runtime" {

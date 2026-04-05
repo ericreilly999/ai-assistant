@@ -60,29 +60,3 @@ resource "aws_bedrock_guardrail_version" "this" {
   description   = "Managed version created by Terraform."
 }
 
-resource "aws_bedrock_prompt" "router" {
-  name        = "${var.name_prefix}-router-prompt"
-  description = "Intent-routing system prompt for the AI assistant orchestrator."
-
-  variant {
-    name          = "default"
-    model_id      = var.router_model_id
-    template_type = "TEXT"
-
-    inference_configuration {
-      text {
-        max_tokens  = 256
-        temperature = 0
-        top_p       = 1
-      }
-    }
-
-    template_configuration {
-      text {
-        text = var.prompt_template
-      }
-    }
-  }
-
-  tags = var.tags
-}
