@@ -68,7 +68,12 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${local.repo}:ref:refs/heads/main"]
+      values = [
+        # Jobs with environment: <env> (e.g. deploy-dev)
+        "repo:${local.repo}:environment:*",
+        # Jobs without environment (e.g. plan-only, CI)
+        "repo:${local.repo}:ref:refs/heads/main",
+      ]
     }
   }
 }
