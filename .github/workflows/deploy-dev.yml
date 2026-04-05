@@ -70,7 +70,7 @@ jobs:
       # Prerequisites:
       #   1. Create an IAM OIDC provider for token.actions.githubusercontent.com
       #   2. Create an IAM role trusted by the OIDC provider with the repo condition:
-      #        repo:<org>/<repo>:ref:refs/heads/main
+      #        repo:<org>/<repo>:environment:dev
       #   3. Attach a policy granting Lambda, API Gateway, Cognito, Secrets Manager,
       #      CloudWatch, IAM (scoped), and S3 (tfstate bucket) permissions.
       #   4. Set the GitHub secret AWS_DEPLOY_ROLE_ARN to the role ARN.
@@ -97,7 +97,7 @@ jobs:
       #     TF_BACKEND_BUCKET  — S3 bucket name for Terraform state
       #   Optional vars (fall back to safe defaults):
       #     AWS_REGION, TF_CORS_ORIGINS, TF_CALLBACK_URLS, TF_LOGOUT_URLS,
-      #     TF_BEDROCK_MODEL_ID, TF_BEDROCK_GUARDRAIL_ID
+      #     TF_BEDROCK_MODEL_ID
       - name: Write terraform.tfvars
         run: |
           cat > terraform/environments/dev/terraform.tfvars <<EOF
@@ -105,7 +105,9 @@ jobs:
           aws_region             = "${{ vars.AWS_REGION || 'us-east-1' }}"
           mock_provider_mode     = true
           cors_allow_origins     = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
-          bedrock_router_model_id = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
+          bedrock_router_model_id    = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
+          bedrock_guardrail_id       = "${{ vars.TF_BEDROCK_GUARDRAIL_ID || 'replace-me' }}"
+          bedrock_guardrail_version  = "DRAFT"
           callback_urls          = [${{ vars.TF_CALLBACK_URLS || '' }}]
           logout_urls            = [${{ vars.TF_LOGOUT_URLS || '' }}]
           EOF
@@ -113,11 +115,10 @@ jobs:
       - name: Write backend config
         run: |
           cat > terraform/environments/dev/backend.hcl <<EOF
-          bucket       = "${{ secrets.TF_BACKEND_BUCKET }}"
-          key          = "ai-assistant/dev/terraform.tfstate"
-          region       = "${{ vars.AWS_REGION || 'us-east-1' }}"
-          use_lockfile = true
-          encrypt      = true
+          bucket  = "${{ secrets.TF_BACKEND_BUCKET }}"
+          key     = "ai-assistant/dev/terraform.tfstate"
+          region  = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          encrypt = true
           EOF
 
       - name: Terraform init
