@@ -133,6 +133,7 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "cognito-idp:UpdateUserPoolClient",
       "cognito-idp:DeleteUserPoolClient",
       "cognito-idp:DescribeUserPoolClient",
+      "cognito-idp:GetUserPoolMfaConfig",
       "cognito-idp:SetUserPoolMfaConfig",
       "cognito-idp:TagResource",
     ]
@@ -148,6 +149,7 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "secretsmanager:DeleteSecret",
       "secretsmanager:DescribeSecret",
       "secretsmanager:GetSecretValue",
+      "secretsmanager:GetResourcePolicy",
       "secretsmanager:TagResource",
     ]
     resources = ["arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:ai-assistant-*"]
@@ -191,6 +193,7 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "cloudwatch:PutMetricAlarm",
       "cloudwatch:DeleteAlarms",
       "cloudwatch:DescribeAlarms",
+      "cloudwatch:ListTagsForResource",
       "cloudwatch:PutDashboard",
       "cloudwatch:DeleteDashboards",
       "cloudwatch:GetDashboard",
@@ -199,6 +202,7 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "logs:DescribeLogGroups",
       "logs:PutRetentionPolicy",
       "logs:TagLogGroup",
+      "logs:ListTagsForResource",
     ]
     resources = ["*"]
   }
