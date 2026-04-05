@@ -48,35 +48,35 @@ data "aws_iam_policy_document" "lambda_runtime" {
   }
 
   statement {
-    sid = "SecretsRead"
-    actions = ["secretsmanager:GetSecretValue"]
+    sid       = "SecretsRead"
+    actions   = ["secretsmanager:GetSecretValue"]
     resources = values(module.secrets.secret_arns)
   }
 }
 
 module "lambda" {
-  source               = "../../modules/lambda_service"
-  function_name        = "${local.name_prefix}-orchestrator"
-  handler              = "assistant_app.handler.lambda_handler"
-  runtime              = "python3.13"
-  filename             = data.archive_file.orchestrator.output_path
-  source_code_hash     = data.archive_file.orchestrator.output_base64sha256
-  timeout              = 30
-  memory_size          = 512
+  source                 = "../../modules/lambda_service"
+  function_name          = "${local.name_prefix}-orchestrator"
+  handler                = "assistant_app.handler.lambda_handler"
+  runtime                = "python3.13"
+  filename               = data.archive_file.orchestrator.output_path
+  source_code_hash       = data.archive_file.orchestrator.output_base64sha256
+  timeout                = 30
+  memory_size            = 512
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
   environment_variables = {
-    APP_ENV                   = var.environment
-    LOG_LEVEL                 = "INFO"
-    MOCK_PROVIDER_MODE        = tostring(var.mock_provider_mode)
-    DEFAULT_TIMEZONE          = "America/New_York"
-    PROPOSAL_TTL_MINUTES      = "15"
-    BEDROCK_ROUTER_MODEL_ID   = var.bedrock_router_model_id
-    BEDROCK_GUARDRAIL_ID      = module.bedrock.guardrail_id
-    BEDROCK_GUARDRAIL_VERSION = module.bedrock.guardrail_version
-    GOOGLE_OAUTH_SECRET_ARN   = module.secrets.secret_arns["google-oauth"]
+    APP_ENV                    = var.environment
+    LOG_LEVEL                  = "INFO"
+    MOCK_PROVIDER_MODE         = tostring(var.mock_provider_mode)
+    DEFAULT_TIMEZONE           = "America/New_York"
+    PROPOSAL_TTL_MINUTES       = "15"
+    BEDROCK_ROUTER_MODEL_ID    = var.bedrock_router_model_id
+    BEDROCK_GUARDRAIL_ID       = module.bedrock.guardrail_id
+    BEDROCK_GUARDRAIL_VERSION  = module.bedrock.guardrail_version
+    GOOGLE_OAUTH_SECRET_ARN    = module.secrets.secret_arns["google-oauth"]
     MICROSOFT_OAUTH_SECRET_ARN = module.secrets.secret_arns["microsoft-oauth"]
-    PLAID_SECRET_ARN          = module.secrets.secret_arns["plaid"]
-    CORS_ALLOWED_ORIGINS      = join(",", var.cors_allow_origins)
+    PLAID_SECRET_ARN           = module.secrets.secret_arns["plaid"]
+    CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
   }
   tags = local.tags
 }
