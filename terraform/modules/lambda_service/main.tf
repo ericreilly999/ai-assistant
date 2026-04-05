@@ -27,7 +27,7 @@ resource "aws_iam_role_policy_attachment" "managed" {
 }
 
 resource "aws_iam_role_policy" "additional" {
-  count  = var.additional_policy_json == "" ? 0 : 1
+  count  = var.has_additional_policy ? 1 : 0
   name   = "${var.function_name}-additional"
   role   = aws_iam_role.this.id
   policy = var.additional_policy_json
