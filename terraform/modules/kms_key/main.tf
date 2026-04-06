@@ -21,5 +21,5 @@ resource "aws_kms_grant" "lambda" {
     "GenerateDataKey",
     "DescribeKey"
   ]
-  key_id            = aws_kms_key.this.id
+  key_id = aws_kms_key.this.id
 }

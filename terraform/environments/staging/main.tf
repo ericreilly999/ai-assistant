@@ -37,8 +37,8 @@ module "bedrock" {
 
 data "aws_iam_policy_document" "lambda_runtime" {
   statement {
-    sid       = "BedrockRuntime"
-    actions   = [
+    sid = "BedrockRuntime"
+    actions = [
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
       "bedrock:ApplyGuardrail",
@@ -96,12 +96,12 @@ module "api" {
     "POST /v1/chat/plan",
     "POST /v1/chat/execute"
   ]
-  protected_routes     = [
+  protected_routes = [
     "GET /v1/integrations",
     "POST /v1/chat/plan",
     "POST /v1/chat/execute"
   ]
-  tags                 = local.tags
+  tags = local.tags
 }
 
 module "observability" {
