@@ -57,3 +57,11 @@ resource "aws_lambda_function" "this" {
   depends_on = [aws_cloudwatch_log_group.this]
   tags       = var.tags
 }
+
+# Create an alias pointing to the latest version for stable references
+resource "aws_lambda_alias" "live" {
+  name            = "live"
+  description     = "Live alias pointing to the latest version of ${var.function_name}"
+  function_name   = aws_lambda_function.this.function_name
+  function_version = aws_lambda_function.this.version
+}

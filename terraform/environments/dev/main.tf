@@ -14,6 +14,14 @@ data "archive_file" "orchestrator" {
   output_path = "${path.root}/build/orchestrator.zip"
 }
 
+module "kms" {
+  source             = "../../modules/kms_key"
+  name               = local.name_prefix
+  description        = "KMS key for encrypting ${local.application_name} secrets and sensitive data"
+  deletion_window_in_days = 10
+  tags               = local.tags
+}
+
 module "auth" {
   source        = "../../modules/cognito_user_pool"
   name_prefix   = local.name_prefix
