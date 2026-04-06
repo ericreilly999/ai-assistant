@@ -82,15 +82,15 @@ module "lambda" {
 }
 
 module "api" {
-  source               = "../../modules/http_api"
-  name                 = "${local.name_prefix}-http-api"
-  stage_name           = var.environment
-  integration_uri      = module.lambda.invoke_arn
-  lambda_function_name = module.lambda.function_name
-  cors_allow_origins   = var.cors_allow_origins
-  authorizer_issuer    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${module.auth.user_pool_id}"
-  authorizer_audience  = [module.auth.app_client_id]
-  routes = [
+  source                 = "../../modules/http_api"
+  name                   = "${local.name_prefix}-http-api"
+  stage_name             = var.environment
+  integration_uri        = module.lambda.invoke_arn
+  lambda_function_name   = module.lambda.function_name
+  cors_allow_origins     = var.cors_allow_origins
+  authorizer_issuer      = "https://cognito-idp.${var.aws_region}.amazonaws.com/${module.auth.user_pool_id}"
+  authorizer_audience    = [module.auth.app_client_id]
+  routes                 = [
     "GET /health",
     "GET /v1/integrations",
     "POST /v1/chat/plan",
@@ -101,14 +101,14 @@ module "api" {
     "POST /v1/chat/plan",
     "POST /v1/chat/execute"
   ]
-  tags = local.tags
+  tags                   = local.tags
 }
 
 module "observability" {
-  source               = "../../modules/service_observability"
-  name_prefix          = local.name_prefix
-  lambda_function_name = module.lambda.function_name
-  api_id               = module.api.api_id
-  stage_name           = module.api.stage_name
-  tags                 = local.tags
+  source                 = "../../modules/service_observability"
+  name_prefix            = local.name_prefix
+  lambda_function_name   = module.lambda.function_name
+  api_id                 = module.api.api_id
+  stage_name             = module.api.stage_name
+  tags                   = local.tags
 }
