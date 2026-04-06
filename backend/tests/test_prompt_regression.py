@@ -8,9 +8,7 @@ responses to avoid real API calls.
 
 from __future__ import annotations
 
-import json
 import unittest
-from unittest.mock import MagicMock, patch
 
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
