@@ -67,6 +67,10 @@ class AppConfig:
 
     @classmethod
     def from_env(cls) -> AppConfig:
+        # Load secrets from AWS Secrets Manager at cold start (if in Lambda)
+        from assistant_app.secrets_manager import load_secrets_from_manager
+        load_secrets_from_manager()
+
         local_env_file = os.getenv("LOCAL_ENV_FILE", "backend/.env.local")
         if os.path.exists(local_env_file):
             _load_local_env(local_env_file)
