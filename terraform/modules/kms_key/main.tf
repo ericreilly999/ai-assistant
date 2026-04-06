@@ -16,7 +16,7 @@ resource "aws_kms_grant" "lambda" {
   count             = var.lambda_role_arn != null ? 1 : 0
   name              = "${var.name}-lambda-grant"
   grantee_principal = var.lambda_role_arn
-  operations = [
+  operations        = [
     "Decrypt",
     "GenerateDataKey",
     "DescribeKey"
