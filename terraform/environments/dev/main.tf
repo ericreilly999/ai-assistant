@@ -104,7 +104,7 @@ module "api" {
     "POST /v1/chat/plan",
     "POST /v1/chat/execute"
   ]
-  protected_routes = [
+  protected_routes       = [
     "GET /v1/integrations",
     "POST /v1/chat/plan",
     "POST /v1/chat/execute"
