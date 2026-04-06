@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from assistant_app.consent import (
     build_action_proposal,
@@ -68,7 +68,7 @@ class ConsentTests(unittest.TestCase):
 
     def test_validate_execute_request_accepts_valid(self) -> None:
         payload = {"list_name": "Groceries", "items": ["milk"]}
-        future = datetime.now(UTC) + timedelta(minutes=10)
+        future = datetime.now(timezone.utc) + timedelta(minutes=10)
         is_valid, message = validate_execute_request(
             {
                 "approved": True,

@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from assistant_app.bedrock_client import BedrockConverseRouter, BedrockGuardrail
@@ -130,7 +130,7 @@ class AssistantOrchestrator:
                 resource = payload
 
             receipt = {
-                "executed_at": datetime.now(UTC).isoformat(),
+                "executed_at": datetime.now(timezone.utc).isoformat(),
                 "mode": mode,
                 "proposal_id": request_payload.get("proposal_id", "unspecified"),
             }
@@ -240,7 +240,7 @@ class AssistantOrchestrator:
             try:
                 from datetime import timedelta
 
-                tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
+                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
                 day_end = tomorrow.replace(hour=23, minute=59, second=59)
@@ -259,7 +259,7 @@ class AssistantOrchestrator:
             try:
                 from datetime import timedelta
 
-                tomorrow = (datetime.now(UTC) + timedelta(days=1)).replace(
+                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
                 day_end = tomorrow.replace(hour=23, minute=59, second=59)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 import urllib.parse
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from assistant_app.config import AppConfig
@@ -109,7 +109,7 @@ class LocalIntegrationService:
                 "grant_type": "authorization_code",
             },
         )
-        tokens["stored_at"] = datetime.now(UTC).isoformat()
+        tokens["stored_at"] = datetime.now(timezone.utc).isoformat()
         self._store.set_tokens("google", tokens)
         return {"provider": "google", "stored": True, "scope": tokens.get("scope", "")}
 
@@ -155,7 +155,7 @@ class LocalIntegrationService:
                 "grant_type": "authorization_code",
             },
         )
-        tokens["stored_at"] = datetime.now(UTC).isoformat()
+        tokens["stored_at"] = datetime.now(timezone.utc).isoformat()
         self._store.set_tokens("microsoft", tokens)
         return {"provider": "microsoft", "stored": True, "scope": tokens.get("scope", "")}
 
@@ -344,7 +344,7 @@ class LocalIntegrationService:
         self._store.set_tokens("plaid", {
             "access_token": access_token,
             "institution_id": institution_id,
-            "stored_at": datetime.now(UTC).isoformat(),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
         })
         return {"institution_id": institution_id, "access_token_stored": True}
 
@@ -366,8 +366,8 @@ class LocalIntegrationService:
     def list_plaid_transactions(self, start_date: str | None, end_date: str | None) -> dict[str, Any]:
         access_token = self._plaid_access_token()
         base = self._plaid_base()
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        thirty_days_ago = datetime.now(UTC).replace(day=1).strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        thirty_days_ago = datetime.now(timezone.utc).replace(day=1).strftime("%Y-%m-%d")
         raw = http_post(
             f"{base}/transactions/get",
             {

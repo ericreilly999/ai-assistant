@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import UTC
+from datetime import timezone
 
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
@@ -128,7 +128,7 @@ class OrchestratorExecuteTests(unittest.TestCase):
 
         payload = {"list_name": "Groceries", "items": ["milk"]}
 
-        past = datetime(2020, 1, 1, tzinfo=UTC)
+        past = datetime(2020, 1, 1, tzinfo=timezone.utc)
         proposal = build_action_proposal(
             provider="google_tasks",
             action_type="upsert_grocery_items",
