@@ -21,7 +21,7 @@ variable "api_gateway_zone_id" {
 }
 
 variable "additional_records" {
-  type = map(object({
+  type        = map(object({
     name    = string
     type    = string
     ttl     = number
