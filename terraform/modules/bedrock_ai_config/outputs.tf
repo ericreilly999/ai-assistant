@@ -12,4 +12,3 @@ output "guardrail_version" {
   description = "Published guardrail version number."
   value       = aws_bedrock_guardrail_version.this.version
 }
-

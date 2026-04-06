@@ -59,4 +59,3 @@ resource "aws_bedrock_guardrail_version" "this" {
   guardrail_arn = aws_bedrock_guardrail.this.guardrail_arn
   description   = "Managed version created by Terraform."
 }
-

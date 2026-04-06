@@ -68,7 +68,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
+      values   = [
         # Jobs with environment: <env> (e.g. deploy-dev uses environment: dev)
         "repo:${local.repo}:environment:*",
         # Jobs without environment (e.g. plan-only, CI on main)
@@ -93,8 +93,8 @@ resource "aws_iam_role" "github_actions" {
 data "aws_iam_policy_document" "deploy_permissions" {
   # Lambda
   statement {
-    sid = "Lambda"
-    actions = [
+    sid       = "Lambda"
+    actions   = [
       "lambda:CreateFunction",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
@@ -115,8 +115,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # API Gateway
   statement {
-    sid = "ApiGateway"
-    actions = [
+    sid       = "ApiGateway"
+    actions   = [
       "apigateway:GET",
       "apigateway:POST",
       "apigateway:PUT",
@@ -129,8 +129,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # Cognito
   statement {
-    sid = "Cognito"
-    actions = [
+    sid       = "Cognito"
+    actions   = [
       "cognito-idp:CreateUserPool",
       "cognito-idp:UpdateUserPool",
       "cognito-idp:DeleteUserPool",
@@ -150,8 +150,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # Secrets Manager
   statement {
-    sid = "SecretsManager"
-    actions = [
+    sid       = "SecretsManager"
+    actions   = [
       "secretsmanager:CreateSecret",
       "secretsmanager:UpdateSecret",
       "secretsmanager:DeleteSecret",
@@ -165,8 +165,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # IAM (scoped to project roles/policies)
   statement {
-    sid = "IAM"
-    actions = [
+    sid       = "IAM"
+    actions   = [
       "iam:CreateRole",
       "iam:UpdateRole",
       "iam:DeleteRole",
@@ -196,8 +196,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # CloudWatch
   statement {
-    sid = "CloudWatch"
-    actions = [
+    sid       = "CloudWatch"
+    actions   = [
       "cloudwatch:PutMetricAlarm",
       "cloudwatch:DeleteAlarms",
       "cloudwatch:DescribeAlarms",
@@ -217,8 +217,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # Bedrock
   statement {
-    sid = "Bedrock"
-    actions = [
+    sid       = "Bedrock"
+    actions   = [
       "bedrock:CreateGuardrail",
       "bedrock:UpdateGuardrail",
       "bedrock:DeleteGuardrail",
@@ -238,8 +238,8 @@ data "aws_iam_policy_document" "deploy_permissions" {
 
   # S3 — tfstate bucket only
   statement {
-    sid = "TfStateBucket"
-    actions = [
+    sid       = "TfStateBucket"
+    actions   = [
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
