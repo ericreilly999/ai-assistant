@@ -1,0 +1,35 @@
+name: Auto Format Terraform
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+
+      - name: Run terraform fmt
+        run: terraform fmt -recursive terraform
+
+      - name: Show diff
+        run: git diff
+
+      - name: Commit if changes
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          if ! git diff --quiet; then
+            git add terraform/
+            git commit -m "fix(terraform): apply terraform fmt formatting"
+            git push
+          else
+            echo "No changes needed"
+          fi
