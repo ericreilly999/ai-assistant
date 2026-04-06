@@ -20,7 +20,7 @@ class ConsentTests(unittest.TestCase):
             payload={"list_name": "Groceries", "items": ["milk"]},
             summary="Add milk",
             ttl_minutes=15,
-            now=datetime(2026, 3, 16, 12, 0, tzinfo=UTC),
+            now=datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc),
         )
         self.assertTrue(proposal.proposal_id)
         self.assertEqual(proposal.payload_hash, payload_hash({"list_name": "Groceries", "items": ["milk"]}))
@@ -47,13 +47,13 @@ class ConsentTests(unittest.TestCase):
                 "payload": {"value": 1},
                 "expires_at": "2026-03-16T12:15:00+00:00",
             },
-            now=datetime(2026, 3, 16, 12, 0, tzinfo=UTC),
+            now=datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc),
         )
         self.assertFalse(is_valid)
         self.assertIn("Payload hash mismatch", message)
 
     def test_validate_execute_request_rejects_expired_proposal(self) -> None:
-        expired_at = datetime(2026, 3, 16, 11, 0, tzinfo=UTC)
+        expired_at = datetime(2026, 3, 16, 11, 0, tzinfo=timezone.utc)
         is_valid, message = validate_execute_request(
             {
                 "approved": True,
