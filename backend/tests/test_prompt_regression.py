@@ -1,3 +1,4 @@
+# Prompt regression test suite
 """Prompt regression tests for the AI Assistant orchestrator.
 
 Tests golden cases for all intents (calendar, tasks, integrations, drive, general)
