@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import timezone
+from datetime import datetime, timezone
 
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
@@ -122,8 +122,6 @@ class OrchestratorExecuteTests(unittest.TestCase):
         self.assertIn("approval", str(ctx.exception))
 
     def test_execute_rejects_expired_proposal(self) -> None:
-        from datetime import datetime
-
         from assistant_app.consent import build_action_proposal
 
         payload = {"list_name": "Groceries", "items": ["milk"]}
