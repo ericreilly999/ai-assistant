@@ -34,3 +34,11 @@ resource "aws_cognito_user_pool_client" "mobile" {
   callback_urls                 = var.callback_urls
   logout_urls                   = var.logout_urls
 }
+
+# Cognito hosted UI domain
+resource "aws_cognito_user_pool_domain" "this" {
+  count           = var.cognito_domain != null ? 1 : 0
+  domain          = var.cognito_domain
+  user_pool_id    = aws_cognito_user_pool.this.id
+  certificate_arn = var.certificate_arn
+}

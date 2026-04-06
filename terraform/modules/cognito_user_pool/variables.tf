@@ -12,6 +12,18 @@ variable "logout_urls" {
   default = []
 }
 
+variable "cognito_domain" {
+  type        = string
+  description = "Domain name for Cognito hosted UI (optional)"
+  default     = null
+}
+
+variable "certificate_arn" {
+  type        = string
+  description = "ARN of ACM certificate for Cognito custom domain (optional)"
+  default     = null
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
