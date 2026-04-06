@@ -56,13 +56,13 @@ Last updated: 2026-04-06
 - [x] Add Cognito hosted UI domain resource to Terraform
 - [x] Expand `service_observability`: p50/p95/p99 alarms, Bedrock failure, provider errors, throttle
 
-## Phase 7 — Mobile
-- [ ] Implement Cognito auth flow: sign-in screen, token storage, JWT headers on API calls
-- [ ] Add proposal reject button + rejection path in `App.tsx`
-- [ ] Add mobile error handling: surface API errors to user
-- [ ] Add scroll-to-bottom and multi-turn conversation history
-- [ ] Add `resource_type`, `risk_level`, payload details to `ActionProposalCard`
-- [ ] Add mobile unit tests: chat screen, approval modal, token handling, provider connection state
+## Phase 7 — Mobile ✅
+- [x] Implement Cognito auth flow: sign-in screen, token storage, JWT headers on API calls
+- [x] Add proposal reject button + rejection path in `App.tsx`
+- [x] Add mobile error handling: surface API errors to user
+- [x] Add scroll-to-bottom and multi-turn conversation history
+- [x] Add `resource_type`, `risk_level`, payload details to `ActionProposalCard`
+- [x] Add mobile unit tests: chat screen, approval modal, token handling, provider connection state
 
-## Phase 8 — Prompt Regression Tests
-- [ ] Build prompt regression test suite: golden cases for all intents + security cases (injection, write-without-consent)
+## Phase 8 — Prompt Regression Tests ✅
+- [x] Build prompt regression test suite: golden cases for all intents + security cases (injection, write-without-consent)
