@@ -1,6 +1,6 @@
 # AI Assistant — Master Todo List
 
-Last updated: 2026-04-04
+Last updated: 2026-04-06
 
 ## Phase 1 — Housekeeping / Quickfixes ✅
 - [x] Fix .gitignore: `dist/`, `backend/.local/`, `terraform/.terraform/` (already correct)
