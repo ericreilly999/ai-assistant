@@ -47,14 +47,14 @@ Last updated: 2026-04-04
 - [x] Implement Bedrock guardrail invocation on user input and model output
 - [x] Add `bedrock_guardrail` and `bedrock_prompt` Terraform resources
 
-## Phase 6 — AWS Deployment (requires credentials + infra)
-- [ ] Implement Secrets Manager runtime loading at Lambda cold start
-- [ ] Fix Plaid credentials to load via Secrets Manager in Lambda
-- [ ] Add `kms_key` Terraform module for CMK encryption of Secrets Manager
-- [ ] Add Lambda alias resource to `lambda_service` Terraform module
-- [ ] Add `acm_certificate` and `route53_records` Terraform modules
-- [ ] Add Cognito hosted UI domain resource to Terraform
-- [ ] Expand `service_observability`: p50/p95/p99 alarms, Bedrock failure, provider errors, throttle
+## Phase 6 — AWS Deployment (requires credentials + infra) ✅
+- [x] Implement Secrets Manager runtime loading at Lambda cold start
+- [x] Fix Plaid credentials to load via Secrets Manager in Lambda
+- [x] Add `kms_key` Terraform module for CMK encryption of Secrets Manager
+- [x] Add Lambda alias resource to `lambda_service` Terraform module
+- [x] Add `acm_certificate` and `route53_records` Terraform modules
+- [x] Add Cognito hosted UI domain resource to Terraform
+- [x] Expand `service_observability`: p50/p95/p99 alarms, Bedrock failure, provider errors, throttle
 
 ## Phase 7 — Mobile
 - [ ] Implement Cognito auth flow: sign-in screen, token storage, JWT headers on API calls
