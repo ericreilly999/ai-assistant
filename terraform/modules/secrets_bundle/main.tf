@@ -12,7 +12,7 @@ resource "aws_secretsmanager_secret" "this" {
 resource "aws_secretsmanager_secret_version" "this" {
   for_each = var.secret_names
 
-  secret_id     = aws_secretsmanager_secret.this[each.value].id
+  secret_id = aws_secretsmanager_secret.this[each.value].id
   secret_string = jsonencode({
     "${replace(each.value, "-", "_")}_id"     = "dev-placeholder-${each.value}-id"
     "${replace(each.value, "-", "_")}_secret" = "dev-placeholder-${each.value}-secret"

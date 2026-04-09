@@ -1,7 +1,7 @@
 locals {
   application_name = "ai-assistant"
   name_prefix      = "${local.application_name}-${var.environment}"
-  tags             = merge(var.tags, {
+  tags = merge(var.tags, {
     Application = local.application_name
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -64,7 +64,7 @@ module "lambda" {
   memory_size            = 512
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
   has_additional_policy  = true
-  environment_variables  = {
+  environment_variables = {
     APP_ENV                    = var.environment
     LOG_LEVEL                  = "INFO"
     MOCK_PROVIDER_MODE         = tostring(var.mock_provider_mode)
@@ -78,7 +78,7 @@ module "lambda" {
     PLAID_SECRET_ARN           = module.secrets.secret_arns["plaid"]
     CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
   }
-  tags                   = local.tags
+  tags = local.tags
 }
 
 module "api" {
@@ -90,7 +90,7 @@ module "api" {
   cors_allow_origins   = var.cors_allow_origins
   authorizer_issuer    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${module.auth.user_pool_id}"
   authorizer_audience  = [module.auth.app_client_id]
-  routes               = [
+  routes = [
     "GET /health",
     "GET /v1/integrations",
     "POST /v1/chat/plan",
