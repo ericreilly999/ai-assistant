@@ -96,18 +96,18 @@ jobs:
       #   Required secrets:
       #     TF_BACKEND_BUCKET  — S3 bucket name for Terraform state
       #   Optional vars (fall back to safe defaults):
-      #     AWS_REGION, TF_CORS_ORIGINS, TF_CALLBACK_URLS, TF_LOGOUT_URLS,
-      #     TF_BEDROCK_MODEL_ID
+      #     AWS_REGION, MOCK_PROVIDER_MODE, TF_CORS_ORIGINS,
+      #     TF_CALLBACK_URLS, TF_LOGOUT_URLS, TF_BEDROCK_MODEL_ID
       - name: Write terraform.tfvars
         run: |
           cat > terraform/environments/dev/terraform.tfvars <<EOF
-          environment            = "dev"
-          aws_region             = "${{ vars.AWS_REGION || 'us-east-1' }}"
-          mock_provider_mode     = true
-          cors_allow_origins     = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
+          environment             = "dev"
+          aws_region              = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          mock_provider_mode      = ${{ vars.MOCK_PROVIDER_MODE || 'true' }}
+          cors_allow_origins      = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
           bedrock_router_model_id = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
-          callback_urls          = [${{ vars.TF_CALLBACK_URLS || '' }}]
-          logout_urls            = [${{ vars.TF_LOGOUT_URLS || '' }}]
+          callback_urls           = [${{ vars.TF_CALLBACK_URLS || '' }}]
+          logout_urls             = [${{ vars.TF_LOGOUT_URLS || '' }}]
           EOF
 
       - name: Write backend config
@@ -127,3 +127,40 @@ jobs:
 
       - name: Terraform apply
         run: terraform -chdir=terraform/environments/dev apply -auto-approve tfplan
+
+      # ── Post-deploy smoke test ──────────────────────────────────────────────
+      # Capture the API endpoint from Terraform output and verify /health returns
+      # HTTP 200. Retries up to 5 times (30 s apart) to allow Lambda cold start.
+      - name: Get API endpoint
+        id: api
+        run: |
+          ENDPOINT=$(terraform -chdir=terraform/environments/dev output -raw api_endpoint)
+          echo "endpoint=$ENDPOINT" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test — GET /health
+        run: |
+          API="${{ steps.api.outputs.endpoint }}"
+          echo "Testing $API/health"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API/health")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Health check failed after 5 attempts."
+          exit 1
+
+      - name: Smoke test — GET /v1/integrations
+        run: |
+          API="${{ steps.api.outputs.endpoint }}"
+          echo "Testing $API/v1/integrations"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API/v1/integrations")
+          echo "HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "Integrations endpoint passed."
+          else
+            echo "Integrations endpoint returned unexpected status $STATUS (non-fatal)."
+          fi
