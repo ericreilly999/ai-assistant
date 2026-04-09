@@ -160,7 +160,12 @@ def _resolve_method(event: dict[str, Any]) -> str:
 
 
 def _resolve_path(event: dict[str, Any]) -> str:
-    return event.get("rawPath") or event.get("path") or "/"
+    # API Gateway HTTP API with a named stage (e.g. "dev") includes the stage
+    # name as a prefix in rawPath ("/dev/health") but strips it in
+    # requestContext.http.path ("/health"). Prefer the stripped version.
+    request_context = event.get("requestContext") or {}
+    http_context = request_context.get("http") or {}
+    return http_context.get("path") or event.get("rawPath") or event.get("path") or "/"
 
 
 def _resolve_query_params(event: dict[str, Any]) -> dict[str, str]:
