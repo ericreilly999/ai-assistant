@@ -119,8 +119,8 @@ resource "aws_cloudwatch_dashboard" "this" {
         properties = {
           metrics = [
             ["AWS/Lambda", "Duration", "FunctionName", var.lambda_function_name, { stat = "p50" }],
-            ["...", { stat = "p95" }],
-            ["...", { stat = "p99" }]
+            ["AWS/Lambda", "Duration", "FunctionName", var.lambda_function_name, { stat = "p95" }],
+            ["AWS/Lambda", "Duration", "FunctionName", var.lambda_function_name, { stat = "p99" }]
           ]
           period = 300
           region = "${data.aws_region.current.name}"
@@ -160,8 +160,8 @@ resource "aws_cloudwatch_dashboard" "this" {
         properties = {
           metrics = [
             ["AWS/ApiGateway", "Latency", "ApiId", var.api_id, "Stage", var.stage_name, { stat = "p50" }],
-            [".....", { stat = "p95" }],
-            [".....", { stat = "p99" }]
+            ["AWS/ApiGateway", "Latency", "ApiId", var.api_id, "Stage", var.stage_name, { stat = "p95" }],
+            ["AWS/ApiGateway", "Latency", "ApiId", var.api_id, "Stage", var.stage_name, { stat = "p99" }]
           ]
           period = 300
           region = "${data.aws_region.current.name}"
