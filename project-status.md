@@ -11,9 +11,9 @@ Last updated: 2026-04-08
 ---
 
 ## Current Phase
-**Lambda deployment and first end-to-end test**
+**First end-to-end test through the mobile app**
 
-All 9 development phases (backend, infra, mobile, tests) are code-complete and merged to `main`. Phase 2 (live provider integrations) is fully verified locally — all Google, Microsoft, and Plaid reads/writes confirmed working. Next: deploy the Lambda and run the first end-to-end test through the mobile app.
+Lambda is deployed and responding at `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/health` in mock mode. CI/CD pipeline is green. Next: configure Cognito hosted UI domain, create `mobile/.env`, and run the first full end-to-end test through the Expo app.
 
 ---
 
@@ -31,7 +31,7 @@ All 9 development phases (backend, infra, mobile, tests) are code-complete and m
 | Cognito User Pool ID | `us-east-1_fo4459oxO` |
 | Cognito App Client ID | `4dqle0d1u53tudl6lg7rfmbbgp` |
 | API Gateway Endpoint | `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com` |
-| Lambda Function | ❌ Not yet deployed |
+| Lambda Function | ✅ Deployed (mock mode) |
 | Secrets Manager (Google) | ❌ Not yet created |
 | Secrets Manager (Microsoft) | ❌ Not yet created |
 | Secrets Manager (Plaid) | ❌ Not yet created |
