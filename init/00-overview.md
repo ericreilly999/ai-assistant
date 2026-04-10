@@ -2,6 +2,14 @@
 
 This `init/` directory contains step-by-step instructions for setting up, running, and deploying the AI Assistant MVP from scratch.
 
+## Tracking Work
+
+> **After completing or verifying any task, immediately:**
+> 1. Check off the item in `TODO.md` (change `- [ ]` to `- [x]`).
+> 2. Update `project-status.md` to reflect the new state (e.g., unblock a next step, mark a blocker resolved, update the deployed resource table).
+>
+> Do not ask whether to update these files — just do it.
+
 ## Always Check Project Status First
 
 > **Before starting any work, read `project-status.md` in the repo root.**

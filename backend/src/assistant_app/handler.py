@@ -160,12 +160,17 @@ def _resolve_method(event: dict[str, Any]) -> str:
 
 
 def _resolve_path(event: dict[str, Any]) -> str:
-    # API Gateway HTTP API with a named stage (e.g. "dev") includes the stage
-    # name as a prefix in rawPath ("/dev/health") but strips it in
-    # requestContext.http.path ("/health"). Prefer the stripped version.
+    # For stage-based URLs (e.g. https://id.execute-api.region.amazonaws.com/dev/health)
+    # AWS includes the stage prefix in rawPath. Strip it using requestContext.stage.
+    # The $default stage has no prefix. Custom domain URLs also have no prefix.
+    raw_path: str = event.get("rawPath") or event.get("path") or "/"
     request_context = event.get("requestContext") or {}
-    http_context = request_context.get("http") or {}
-    return http_context.get("path") or event.get("rawPath") or event.get("path") or "/"
+    stage: str = request_context.get("stage", "")
+    if stage and stage != "$default" and raw_path.startswith(f"/{stage}/"):
+        return raw_path[len(f"/{stage}"):]
+    if stage and stage != "$default" and raw_path == f"/{stage}":
+        return "/"
+    return raw_path
 
 
 def _resolve_query_params(event: dict[str, Any]) -> dict[str, str]:

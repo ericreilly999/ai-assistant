@@ -67,6 +67,18 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(response["statusCode"], 404)
         self.assertIn("No route", body["message"])
 
+    def test_health_with_stage_prefix_stripped(self) -> None:
+        # API Gateway named stages include the stage in rawPath (e.g. /dev/health).
+        # The handler must strip it so routing works correctly.
+        event = {
+            "rawPath": "/dev/health",
+            "requestContext": {"http": {"method": "GET"}, "stage": "dev"},
+        }
+        response = self.handler(event, None)
+        self.assertEqual(response["statusCode"], 200)
+        body = json.loads(response["body"])
+        self.assertEqual(body["environment"], "dev")
+
     def test_integrations_route(self) -> None:
         response = self.handler(self._req("GET", "/v1/integrations"), None)
         body = json.loads(response["body"])

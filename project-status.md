@@ -11,9 +11,9 @@ Last updated: 2026-04-08
 ---
 
 ## Current Phase
-**Live integration, Lambda deployment, and first end-to-end test**
+**Lambda deployment and first end-to-end test**
 
-All 9 development phases (backend, infra, mobile, tests) are code-complete and merged to `main`. The work remaining is operational: deploying the Lambda, loading credentials into AWS, and doing a real end-to-end run through the mobile app.
+All 9 development phases (backend, infra, mobile, tests) are code-complete and merged to `main`. Phase 2 (live provider integrations) is fully verified locally — all Google, Microsoft, and Plaid reads/writes confirmed working. Next: deploy the Lambda and run the first end-to-end test through the mobile app.
 
 ---
 
@@ -41,25 +41,13 @@ All 9 development phases (backend, infra, mobile, tests) are code-complete and m
 
 ## Current Blockers (waiting on Eric)
 
-### 1. Google OAuth Credentials
-- Where to find: [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
-- Find the OAuth 2.0 client created for this project
-- Need: **Client ID** and **Client Secret**
-- Redirect URI that must be registered: `http://localhost:8787/oauth/google/callback`
-- Scopes needed: `calendar`, `tasks`, `drive.readonly`
+### 1. GitHub Secrets (required for CI/CD Lambda deploy)
 
-### 2. Microsoft OAuth Credentials
-- Where to find: [portal.azure.com](https://portal.azure.com) → App registrations
-- Find the ai-assistant app registration
-- Need: **Application (client) ID** and a **Client Secret** (from "Certificates & secrets")
-- Redirect URI that must be registered: `http://localhost:8787/oauth/microsoft/callback`
-- Scopes needed: `Calendars.ReadWrite`, `Tasks.ReadWrite`, `offline_access`
+Missing — set these in GitHub → Settings → Environments → dev → Secrets:
+- [ ] `AWS_DEPLOY_ROLE_ARN` = `arn:aws:iam::290993374431:role/ai-assistant-github-actions-deploy`
+- [ ] `TF_BACKEND_BUCKET` = `ericreilly999-ai-assistant-tfstate`
 
-### 3. Plaid Credentials
-- Where to find: [dashboard.plaid.com/developers/keys](https://dashboard.plaid.com/developers/keys)
-- Need: **Client ID** and **Sandbox Secret**
-
-Once Eric provides these, the next steps below can be completed by Claude Code without further input.
+Once the GitHub secrets are set, push to `main` to trigger the CI/CD deploy.
 
 ---
 

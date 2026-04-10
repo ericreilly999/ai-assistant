@@ -11,14 +11,14 @@ Last updated: 2026-04-06
 - [x] Add graceful HTML error page to OAuth start routes when credentials are not configured
 
 ## Phase 2 — Local Provider Integrations ✅
-- [ ] Verify Google OAuth flow end-to-end locally (start → redirect → token exchange → dev_store)
-- [ ] Verify Microsoft OAuth flow end-to-end locally
-- [ ] Verify Plaid sandbox bootstrap and account/transaction reads
-- [ ] Verify Google Calendar live reads and create_event write
-- [ ] Verify Google Tasks live reads and create_task write
-- [ ] Verify Google Drive live document list and export
-- [ ] Verify Microsoft Calendar live reads and create_event write
-- [ ] Verify Microsoft Todo live reads and create_task write
+- [x] Verify Google OAuth flow end-to-end locally (start → redirect → token exchange → dev_store)
+- [x] Verify Microsoft OAuth flow end-to-end locally
+- [x] Verify Plaid sandbox bootstrap and account/transaction reads
+- [x] Verify Google Calendar live reads and create_event write
+- [x] Verify Google Tasks live reads and create_task write
+- [x] Verify Google Drive live document list and export
+- [x] Verify Microsoft Calendar live reads and create_event write
+- [x] Verify Microsoft Todo live reads and create_task write
 - [x] Add `update_task()` and `complete_task()` to `google_tasks.py` + wire into `_execute_live()`
 - [x] Add `update_task()` and `complete_task()` to `microsoft_todo.py` + wire into `_execute_live()`
 
