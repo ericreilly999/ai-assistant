@@ -2,6 +2,10 @@ output "api_endpoint" {
   value = module.api.api_endpoint
 }
 
+output "stage_name" {
+  value = module.api.stage_name
+}
+
 output "user_pool_id" {
   value = module.auth.user_pool_id
 }

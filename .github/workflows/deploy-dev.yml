@@ -134,8 +134,9 @@ jobs:
       - name: Get API endpoint
         id: api
         run: |
-          ENDPOINT=$(terraform -chdir=terraform/environments/dev output -raw api_endpoint)
-          echo "endpoint=$ENDPOINT" >> "$GITHUB_OUTPUT"
+          BASE=$(terraform -chdir=terraform/environments/dev output -raw api_endpoint)
+          STAGE=$(terraform -chdir=terraform/environments/dev output -raw stage_name 2>/dev/null || echo "dev")
+          echo "endpoint=$BASE/$STAGE" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test — GET /health
         run: |
