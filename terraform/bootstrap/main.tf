@@ -148,6 +148,18 @@ data "aws_iam_policy_document" "deploy_permissions" {
     resources = ["arn:aws:cognito-idp:*:${data.aws_caller_identity.current.account_id}:userpool/*"]
   }
 
+  # Cognito Hosted UI Domain (domain actions are not scoped to a userpool ARN)
+  statement {
+    sid = "CognitoDomain"
+    actions = [
+      "cognito-idp:CreateUserPoolDomain",
+      "cognito-idp:UpdateUserPoolDomain",
+      "cognito-idp:DeleteUserPoolDomain",
+      "cognito-idp:DescribeUserPoolDomain",
+    ]
+    resources = ["*"]
+  }
+
   # Secrets Manager
   statement {
     sid = "SecretsManager"
