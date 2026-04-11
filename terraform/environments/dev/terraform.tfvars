@@ -16,4 +16,4 @@ logout_urls = [
   "exp://127.0.0.1:8081",
   "exp://10.0.2.2:8081",
 ]
-cognito_domain          = "ai-assistant-dev"
+cognito_domain = "ai-assistant-dev"
