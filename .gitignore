@@ -12,3 +12,8 @@ dist/
 mobile/node_modules/
 mobile/.expo/
 mobile/.expo-shared/
+mobile/.env
+backend/.env.local
+backend/.local/
+.claude/settings.local.json
+tmpapigw_test.json
