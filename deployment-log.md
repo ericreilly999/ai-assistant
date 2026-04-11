@@ -102,6 +102,30 @@
 
 ---
 
+### Deploy #5 — Cognito Callback URLs + IAM Fix
+**Date**: 2026-04-11  
+**Environment**: dev  
+**Triggered by**: Push to `main` → CI/CD pipeline (`.github/workflows/deploy-dev.yml`)  
+**Deployed by**: GitHub Actions (OIDC → IAM role `ai-assistant-github-actions-deploy`)  
+**Change**: Registered Expo Go redirect URIs in Cognito app client (`callback_urls` and `logout_urls`). Also fixed IAM deploy role: added `CognitoDomain` statement scoping domain actions to resource `*` (required by AWS — domain actions cannot be scoped to `userpool/*` ARN).  
+**Result**: ✅ Success — Terraform apply succeeded, smoke tests pass  
+
+**GitHub Actions variables set:**
+
+| Variable | Value |
+|---|---|
+| `TF_CALLBACK_URLS` | `"exp://localhost:8081", "exp://127.0.0.1:8081", "exp://10.0.2.2:8081", "exp://localhost:8081/--/", "exp://127.0.0.1:8081/--/", "exp://10.0.2.2:8081/--/"` |
+| `TF_LOGOUT_URLS` | `"exp://localhost:8081", "exp://127.0.0.1:8081", "exp://10.0.2.2:8081"` |
+
+**Cognito App Client Callback URLs now registered:**
+- `exp://localhost:8081` and `exp://localhost:8081/--/`
+- `exp://127.0.0.1:8081` and `exp://127.0.0.1:8081/--/`
+- `exp://10.0.2.2:8081` and `exp://10.0.2.2:8081/--/`
+
+**Notes**: T-12 Cognito blocker fully resolved. Eric can now run the T-12 manual smoke test. Steps in `test-signoff.md` — Phase 4.
+
+---
+
 ## Staging Environment
 
 **Status**: ❌ Not yet deployed  

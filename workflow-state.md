@@ -13,7 +13,7 @@
 
 **Stage**: 4 — QA Validation (Dev Environment)  
 **Status**: In Progress — one infrastructure fix in flight, then manual testing by Eric  
-**Active agent**: DevOps Engineer (T-12 unblock — committing callback_urls fix)  
+**Active agent**: None — awaiting Eric manual action (T-12 smoke test)  
 **Started**: 2026-04-08
 
 ---
@@ -35,16 +35,12 @@
 
 ## Next Action
 
-**DevOps Engineer** — commit `terraform/environments/dev/terraform.tfvars` (callback_urls fix), `.gitignore`, and `project-status.md` then push to `main`. CI/CD will apply Terraform and register the Expo redirect URIs with the Cognito app client.
+**Eric (human action)** — T-12 manual smoke test. Run the Expo app, sign in via Cognito hosted UI, send a chat message, trigger a write proposal, approve it, reject one. Steps are in `test-signoff.md` — Phase 4 section. All infrastructure blockers are resolved.
 
-Once CI/CD confirms success: **Eric** runs the T-12 manual smoke test (sign-in via Cognito hosted UI, chat round-trip, proposal approve/reject). Steps are documented in `test-signoff.md` — Phase 4 section.
-
-After T-12 passes: **QA Engineer** runs T-16 (provider OAuth flows) and T-17 (full live end-to-end test + Stage 4 sign-off).
+After T-12 passes: **QA Engineer** runs T-16 (provider OAuth flows via `scripts/start-provider-auth.ps1`) and T-17 (full live end-to-end test + Stage 4 sign-off in `test-signoff.md`).
 
 ---
 
 ## Active Blockers
 
-| Blocker | Owner | Resolution |
-|---------|-------|------------|
-| Cognito callback_urls empty — Expo redirect URIs not registered | DevOps Engineer | Commit + push terraform.tfvars (fix already written locally) |
+None — all infrastructure blockers resolved. Waiting on Eric to execute T-12 manual smoke test.

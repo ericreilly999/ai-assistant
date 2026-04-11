@@ -17,20 +17,18 @@ The MVP is fully implemented and deployed to the dev environment in **live provi
 
 ## What's In Progress
 
-**DevOps:** Committing `terraform/environments/dev/terraform.tfvars` (callback_urls fix) and pushing to main → CI/CD applies Terraform → Cognito app client gets proper redirect URIs registered.
+Nothing — all infrastructure is live. Waiting on Eric to run the T-12 manual smoke test.
 
 ## What's Coming Next
 
-1. **Eric (human action)** — T-12: Run manual smoke test through Expo mobile app (sign-in → chat → proposal → approve/reject) once CI/CD confirms Cognito callback_urls applied
+1. **Eric (human action)** — T-12: Run manual smoke test through Expo mobile app (sign-in → chat → proposal → approve/reject). All blockers resolved — steps in `test-signoff.md` Phase 4.
 2. **QA Engineer** — T-16: Provider OAuth flows (Google + Microsoft) via `scripts/start-provider-auth.ps1`
 3. **QA Engineer** — T-17: Full live end-to-end test + Stage 4 sign-off in `test-signoff.md`
 4. **DevOps Engineer** — T-18: Staging CI/CD pipeline (only after Stage 4 sign-off)
 
 ## Blockers
 
-| Blocker | Impact | Owner | Status |
-|---------|--------|-------|--------|
-| Cognito callback_urls empty — OAuth redirect rejected | High — blocks mobile sign-in (T-12) | DevOps Engineer | In flight — terraform.tfvars fix uncommitted, push required |
+None — all infrastructure blockers resolved. T-12 awaits Eric's manual execution.
 
 ## Risks
 
