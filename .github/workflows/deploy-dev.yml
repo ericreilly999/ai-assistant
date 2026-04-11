@@ -97,7 +97,8 @@ jobs:
       #     TF_BACKEND_BUCKET  — S3 bucket name for Terraform state
       #   Optional vars (fall back to safe defaults):
       #     AWS_REGION, MOCK_PROVIDER_MODE, TF_CORS_ORIGINS,
-      #     TF_CALLBACK_URLS, TF_LOGOUT_URLS, TF_BEDROCK_MODEL_ID
+      #     TF_CALLBACK_URLS, TF_LOGOUT_URLS, TF_BEDROCK_MODEL_ID,
+      #     TF_COGNITO_DOMAIN
       - name: Write terraform.tfvars
         run: |
           cat > terraform/environments/dev/terraform.tfvars <<EOF
@@ -108,6 +109,7 @@ jobs:
           bedrock_router_model_id = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
           callback_urls           = [${{ vars.TF_CALLBACK_URLS || '' }}]
           logout_urls             = [${{ vars.TF_LOGOUT_URLS || '' }}]
+          cognito_domain          = "${{ vars.TF_COGNITO_DOMAIN || 'ai-assistant-dev' }}"
           EOF
 
       - name: Write backend config

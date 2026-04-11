@@ -14,6 +14,11 @@ output "user_pool_client_id" {
   value = module.auth.app_client_id
 }
 
+output "cognito_hosted_ui_url" {
+  value       = module.auth.cognito_domain != null ? "https://${module.auth.cognito_domain}.auth.${var.aws_region}.amazoncognito.com" : null
+  description = "Full Cognito hosted UI base URL"
+}
+
 output "lambda_function_name" {
   value = module.lambda.function_name
 }

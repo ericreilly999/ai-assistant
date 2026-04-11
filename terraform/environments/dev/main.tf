@@ -23,17 +23,19 @@ module "kms" {
 }
 
 module "auth" {
-  source        = "../../modules/cognito_user_pool"
-  name_prefix   = local.name_prefix
-  callback_urls = var.callback_urls
-  logout_urls   = var.logout_urls
-  tags          = local.tags
+  source         = "../../modules/cognito_user_pool"
+  name_prefix    = local.name_prefix
+  callback_urls  = var.callback_urls
+  logout_urls    = var.logout_urls
+  cognito_domain = var.cognito_domain
+  tags           = local.tags
 }
 
 module "secrets" {
   source       = "../../modules/secrets_bundle"
   name_prefix  = local.name_prefix
   secret_names = ["google-oauth", "microsoft-oauth", "plaid"]
+  kms_key_arn  = module.kms.key_arn
   tags         = local.tags
 }
 
