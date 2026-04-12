@@ -29,10 +29,13 @@ resource "aws_cognito_user_pool_client" "mobile" {
     "ALLOW_REFRESH_TOKEN_AUTH",
     "ALLOW_USER_SRP_AUTH"
   ]
-  prevent_user_existence_errors = "ENABLED"
-  supported_identity_providers  = ["COGNITO"]
-  callback_urls                 = var.callback_urls
-  logout_urls                   = var.logout_urls
+  prevent_user_existence_errors        = "ENABLED"
+  supported_identity_providers         = ["COGNITO"]
+  callback_urls                        = var.callback_urls
+  logout_urls                          = var.logout_urls
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
 }
 
 # Cognito hosted UI domain
