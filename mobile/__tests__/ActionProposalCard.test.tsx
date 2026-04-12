@@ -1,4 +1,5 @@
 import React from "react";
+import { StyleSheet } from "react-native";
 import { fireEvent, render } from "@testing-library/react-native";
 
 import { ActionProposalCard } from "../src/components/ActionProposalCard";
@@ -89,34 +90,28 @@ describe("ActionProposalCard", () => {
 
   it("high risk badge uses red color", () => {
     const proposal = makeProposal({ risk_level: "high" });
-    const { getByText } = render(
+    const { getByTestId } = render(
       <ActionProposalCard proposal={proposal} onApprove={jest.fn()} onReject={jest.fn()} />
     );
-    const badge = getByText("HIGH");
-    expect(badge.parent?.props.style).toEqual(
-      expect.objectContaining({ backgroundColor: "#b91c1c" })
-    );
+    const flat = StyleSheet.flatten(getByTestId("risk-badge").props.style);
+    expect(flat.backgroundColor).toBe("#b91c1c");
   });
 
   it("medium risk badge uses orange color", () => {
     const proposal = makeProposal({ risk_level: "medium" });
-    const { getByText } = render(
+    const { getByTestId } = render(
       <ActionProposalCard proposal={proposal} onApprove={jest.fn()} onReject={jest.fn()} />
     );
-    const badge = getByText("MEDIUM");
-    expect(badge.parent?.props.style).toEqual(
-      expect.objectContaining({ backgroundColor: "#c2740a" })
-    );
+    const flat = StyleSheet.flatten(getByTestId("risk-badge").props.style);
+    expect(flat.backgroundColor).toBe("#c2740a");
   });
 
   it("low risk badge uses green color", () => {
     const proposal = makeProposal({ risk_level: "low" });
-    const { getByText } = render(
+    const { getByTestId } = render(
       <ActionProposalCard proposal={proposal} onApprove={jest.fn()} onReject={jest.fn()} />
     );
-    const badge = getByText("LOW");
-    expect(badge.parent?.props.style).toEqual(
-      expect.objectContaining({ backgroundColor: "#166534" })
-    );
+    const flat = StyleSheet.flatten(getByTestId("risk-badge").props.style);
+    expect(flat.backgroundColor).toBe("#166534");
   });
 });

@@ -30,6 +30,7 @@ export function SignInScreen({ onSignedIn }: Props) {
   const [loading, setLoading] = useState(false);
 
   const redirectUri = AuthSession.makeRedirectUri();
+  console.log("[Auth] redirectUri:", redirectUri);
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {

@@ -23,8 +23,8 @@ export function ActionProposalCard({ proposal, disabled, onApprove, onReject }: 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.provider}>{proposal.provider}</Text>
-        <View style={[styles.riskBadge, { backgroundColor: riskColor }]}>
+        <Text style={styles.provider}>{proposal.provider.toUpperCase()}</Text>
+        <View testID="risk-badge" style={[styles.riskBadge, { backgroundColor: riskColor }]}>
           <Text style={styles.riskText}>{proposal.risk_level.toUpperCase()}</Text>
         </View>
       </View>
@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
     color: "#8c5e34",
     fontSize: 12,
     fontWeight: "700",
-    textTransform: "uppercase",
     letterSpacing: 1,
   },
   riskBadge: {
