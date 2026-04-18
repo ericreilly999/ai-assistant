@@ -4,30 +4,28 @@
 
 ## Summary
 
-Stage 4 (QA Validation on Dev) is in progress. Phase 13 (LLM Tool Use Orchestrator) is complete and deployed — the keyword-based intent classifier has been replaced by a Bedrock Converse agent loop with 9 tool definitions, read-before-write ID validation, and 257 tests passing. CI/CD hardening (Checkov enforcement, auto-fmt PR flow, coverage gate) is also merged. T-12 manual smoke test is ready for Eric to execute.
+Stage 4 (QA Validation on Dev) is in progress. All pending PRs are now merged to main: coverage raised to 89% (PR #16), `<thinking>` tag stripping fix (PR #15), and integreat display rebrand (PR #14). CI/CD is fully green (backend-tests, backend-lint, mobile-typecheck, lambda-package-build). Deploy triggered by main push — Lambda redeploy in flight. T-12 manual smoke test is ready for Eric once deploy settles.
 
 ## What We Just Completed
 
-- 2026-04-18 — Phase 13 security fix: `list_id` validation against prior `get_task_lists` results; `_extract_prior_task_ids` now scoped to `get_tasks` only; dead `classify()` removed — 257 tests green (pushed to main)
-- 2026-04-18 — Phase 13 (LLM Tool Use Orchestrator) merged: PR #12 — `tool_definitions.py`, `tool_handlers.py`, agent loop in `orchestrator.py`, `intent.py` deleted, 254 tests
-- 2026-04-18 — CI/CD hardening merged: PR #11 — Checkov enforcement, auto-fmt PR flow, 80% coverage gate
-- 2026-04-18 — Deploy #7: `exp://192.168.6.249:8081` registered in Cognito callback URLs
-- 2026-04-18 — Deploy #6: `ai-assistant://` native scheme registered in Cognito
-- 2026-04-18 — PR #10 merged: intent classification fix (META_HINTS)
+- 2026-04-18 — PR #14 merged: integreat display rebrand (app name, screen headers, system prompt, README)
+- 2026-04-18 — PR #15 merged: `<thinking>` tag stripping in `orchestrator.py` — Nova Pro inline XML no longer leaks to mobile UI
+- 2026-04-18 — PR #16 merged: test coverage raised to 89% (was 67%) — 408 tests, 4 new test modules, CI install fixed to `backend[test]`
+- 2026-04-18 — Zombie infra teardown: 8 ECR repos (us-west-2) + orphaned EIP deleted — ~$20.60/month saved
+- 2026-04-18 — PM skill updated: project-status.md update policy, project-status/ gitignore rule; pushed to ericreilly999/claude main
+- 2026-04-18 — Phase 13 security fix: `list_id` + `task_id` validation, dead `classify()` removed — 257 tests green
 
 ## What's In Progress
 
-- Dev deploy triggered by Phase 13 security fix push to main (Deploy #8 in flight)
-- Awaiting Eric approval to invoke DevOps for zombie infra teardown (~$95–128/month savings)
+- Dev deploy triggered by main push (PRs #14/#15/#16) — Lambda redeploy in flight
 
 ## What's Coming Next
 
-1. **Eric (human action)** — Approve or defer zombie infra teardown (RDS, ECR, ALB, NAT Gateway — $40.47/month waste)
-2. **Eric (human action)** — T-12: Manual smoke test (sign-in → chat → proposal → approve/reject → sign-out)
-3. **DevOps Engineer** — Align `deploy-dev.yml` gate with `pytest --cov-fail-under=80` (currently uses `unittest discover`)
-4. **QA Engineer** — T-16: Provider OAuth flows (Google + Microsoft)
-5. **QA Engineer** — T-17: Full live end-to-end test + Stage 4 sign-off
-6. **DevOps Engineer** — T-18: Staging CI/CD pipeline (after Stage 4 sign-off)
+1. **Eric (human action)** — T-12: Manual smoke test on device/simulator after deploy settles (sign-in → chat → proposal → approve/reject → sign-out). Verify "integreat" branding and no `<thinking>` leakage.
+2. **QA Engineer** — Add `test_multiple_thinking_blocks_all_stripped` to `OrchestratorThinkingTagStrippingTests` (identified as open item by code reviewer on PR #15)
+3. **QA Engineer** — T-16: Provider OAuth flows (Google + Microsoft)
+4. **QA Engineer** — T-17: Full live end-to-end test + Stage 4 sign-off
+5. **DevOps Engineer** — T-18: Staging CI/CD pipeline (after Stage 4 sign-off)
 
 ## Blockers
 
@@ -37,7 +35,6 @@ None.
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Zombie infra ($40.47/mo) — RDS, ECR, ALB, NAT Gateway not torn down | H | H | DevOps teardown — awaiting Eric approval |
-| Google/Microsoft OAuth app not registered for dev redirect URIs | M | H | Eric to verify redirect URI registration during T-16 |
-| deploy-dev.yml uses unittest not pytest — coverage gate not enforced on deploy path | M | M | DevOps follow-up task to align with ci.yml |
+| Google/Microsoft OAuth app not registered for dev redirect URIs | M | H | Eric to verify redirect URI registration in Google/Microsoft developer consoles during T-16 |
 | Staging AWS infrastructure does not yet exist (IAM role, S3 bucket) | L | M | T-18 covers this; not needed until Stage 4 QA sign-off is complete |
+| Production go-live blocked if staging reveals systemic issues | L | H | Full live provider test suite in Stage 4 reduces staging risk |
