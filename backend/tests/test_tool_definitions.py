@@ -31,7 +31,6 @@ Coverage map:
 
 from __future__ import annotations
 
-import json
 import unittest
 
 # This import will raise ImportError until T-28 is implemented.

@@ -32,13 +32,11 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from assistant_app.config import AppConfig
-
 # These imports will fail with ImportError until T-30/T-31 is implemented.
 from assistant_app.bedrock_client import MockBedrockAgent
+from assistant_app.config import AppConfig
 from assistant_app.orchestrator import AssistantOrchestrator
 from assistant_app.registry import ProviderRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
