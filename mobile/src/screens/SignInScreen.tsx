@@ -78,7 +78,7 @@ export function SignInScreen({ onSignedIn }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.brandBlock}>
-          <Text style={styles.eyebrow}>Personal Operations Assistant</Text>
+          <Text style={styles.eyebrow}>integreat</Text>
           <Text style={styles.heading}>Your AI assistant for calendar, tasks, and more</Text>
           <Text style={styles.subtext}>
             Connect your calendar, tasks, and finance accounts. Review and approve every action before it runs.
