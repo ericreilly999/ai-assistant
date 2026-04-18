@@ -139,7 +139,7 @@ Expected: QR code displayed in terminal. Expo DevTools at http://localhost:8081.
 - Android Emulator: press `a`
 - Physical device: scan QR code with Expo Go app
 
-Expected: App loads showing "Personal Operations Assistant" sign-in screen with a green "Sign In" button.
+Expected: App loads showing "integreat" sign-in screen with a green "Sign In" button.
 
 **Step 3 — Cognito sign-in flow**
 1. Tap "Sign In"
@@ -148,7 +148,7 @@ Expected: App loads showing "Personal Operations Assistant" sign-in screen with 
 4. If prompted for MFA or password change, complete it
 5. Cognito redirects back to the app via the registered callback URI
 
-Expected on success: Browser closes, app transitions to the Chat screen showing "Assistant" in the header and the welcome message: "Ask about your calendar, groceries, meeting prep, or travel planning."
+Expected on success: Browser closes, app transitions to the Chat screen showing "integreat" in the header and the welcome message: "Ask about your calendar, groceries, meeting prep, or travel planning."
 
 Expected on failure: Error displayed in the sign-in screen. Common causes: callback_url not registered (see blocker above), user does not exist, incorrect password.
 
