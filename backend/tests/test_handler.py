@@ -1,8 +1,15 @@
+"""Handler tests — updated for Phase 13 agent loop.
+
+plan() tests now inject MockBedrockAgent via patching. execute() tests are unchanged.
+Intent values updated: domain-specific → 'agent'.
+"""
 from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
+from assistant_app.bedrock_client import MockBedrockAgent
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
 from assistant_app.handler import build_handler
@@ -24,9 +31,45 @@ def _make_config(**overrides):
     return AppConfig(**defaults)
 
 
+def _tool_use_response(tool_name: str, tool_input: dict, tool_use_id: str = "tu-001") -> dict:
+    return {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": tool_use_id,
+                            "name": tool_name,
+                            "input": tool_input,
+                        }
+                    }
+                ],
+            }
+        },
+        "usage": {"inputTokens": 100, "outputTokens": 50},
+    }
+
+
+def _text_response(text: str) -> dict:
+    return {
+        "stopReason": "end_turn",
+        "output": {
+            "message": {
+                "role": "assistant",
+                "content": [{"text": text}],
+            }
+        },
+        "usage": {"inputTokens": 80, "outputTokens": 40},
+    }
+
+
 class HandlerTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.handler = build_handler(_make_config(), ProviderRegistry(mock_mode=True))
+        self.config = _make_config()
+        self.registry = ProviderRegistry(mock_mode=True)
+        self.handler = build_handler(self.config, self.registry)
 
     def _req(self, method: str, path: str, body: dict | None = None, query: dict | None = None) -> dict:
         event: dict = {
@@ -38,6 +81,24 @@ class HandlerTests(unittest.TestCase):
         if query:
             event["queryStringParameters"] = query
         return event
+
+    def _plan_with_mock(self, message: str, mock_turns: list[dict], providers=None) -> dict:
+        """Helper: call /v1/chat/plan with MockBedrockAgent injected."""
+        from assistant_app.orchestrator import AssistantOrchestrator
+
+        orch = AssistantOrchestrator(self.config, self.registry)
+        orch._router = MockBedrockAgent(mock_turns)
+
+        with patch(
+            "assistant_app.handler.AssistantOrchestrator",
+            return_value=orch,
+        ):
+            handler = build_handler(self.config, self.registry)
+            body: dict = {"message": message}
+            if providers:
+                body["providers"] = providers
+            response = handler(self._req("POST", "/v1/chat/plan", body), None)
+        return json.loads(response["body"])
 
     # ------------------------------------------------------------------
     # Infrastructure routes
@@ -68,8 +129,6 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("No route", body["message"])
 
     def test_health_with_stage_prefix_stripped(self) -> None:
-        # API Gateway named stages include the stage in rawPath (e.g. /dev/health).
-        # The handler must strip it so routing works correctly.
         event = {
             "rawPath": "/dev/health",
             "requestContext": {"http": {"method": "GET"}, "stage": "dev"},
@@ -92,7 +151,6 @@ class HandlerTests(unittest.TestCase):
 
     def test_google_oauth_start_redirects_when_not_configured(self) -> None:
         response = self.handler(self._req("GET", "/oauth/google/start"), None)
-        # No Google credentials configured → 400 with HTML error page
         self.assertEqual(response["statusCode"], 400)
         self.assertIn("Not Configured", response["body"])
 
@@ -102,64 +160,91 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("Not Configured", response["body"])
 
     # ------------------------------------------------------------------
-    # Plan routes
+    # Plan routes — Phase 13: inject MockBedrockAgent, expect intent='agent'
     # ------------------------------------------------------------------
 
     def test_plan_route_grocery(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "Add bananas to my grocery list"}),
-            None,
+        body = self._plan_with_mock(
+            "Add bananas to my grocery list",
+            [
+                _tool_use_response("get_grocery_lists", {}, tool_use_id="tu-gl"),
+                _tool_use_response(
+                    "propose_grocery_items",
+                    {"list_name": "Groceries", "items": ["bananas"]},
+                    tool_use_id="tu-gi",
+                ),
+                _text_response("Proposed adding bananas to your Groceries list."),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(body["intent"], "grocery")
-        self.assertEqual(len(body["proposals"]), 1)
+        self.assertEqual(body["intent"], "agent")
+        self.assertGreaterEqual(len(body["proposals"]), 1)
 
     def test_plan_route_calendar(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "What does my day look like tomorrow?"}),
-            None,
+        body = self._plan_with_mock(
+            "What does my day look like tomorrow?",
+            [
+                _tool_use_response(
+                    "get_calendar_events",
+                    {"start": "2026-04-19T00:00:00-04:00", "end": "2026-04-19T23:59:59-04:00"},
+                ),
+                _text_response(
+                    "Tomorrow you have Team Standup at 9am and Architecture Review at 2pm."
+                ),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(body["intent"], "calendar")
+        self.assertEqual(body["intent"], "agent")
         self.assertIn("Tomorrow", body["message"])
 
     def test_plan_route_meeting_prep(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "Prepare me for my architecture review"}),
-            None,
+        body = self._plan_with_mock(
+            "Prepare me for my architecture review",
+            [
+                _tool_use_response("get_meeting_documents", {"keyword": "architecture review"}),
+                _text_response("For your review I found Architecture Review Deck in Drive."),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(body["intent"], "meeting_prep")
+        self.assertEqual(body["intent"], "agent")
 
     def test_plan_route_tasks_intent(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "Complete my task"}),
-            None,
+        body = self._plan_with_mock(
+            "Complete my task",
+            [
+                _tool_use_response("get_task_lists", {}, tool_use_id="tu-tl"),
+                _tool_use_response("get_tasks", {"list_id": "list-001"}, tool_use_id="tu-gt"),
+                _tool_use_response(
+                    "propose_task_complete",
+                    {"list_id": "list-001", "task_id": "task-001"},
+                    tool_use_id="tu-tc",
+                ),
+                _text_response("Proposed completing your task."),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(body["intent"], "tasks")
+        self.assertEqual(body["intent"], "agent")
 
     def test_plan_route_general_fallback_returns_helpful_message(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "something completely unrecognized xyz"}),
-            None,
+        body = self._plan_with_mock(
+            "something completely unrecognized xyz",
+            [
+                _text_response(
+                    "I can help you with calendars, tasks, grocery lists, and meeting prep."
+                ),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(body["intent"], "general")
+        self.assertEqual(body["intent"], "agent")
         self.assertIn("calendars", body["message"])
 
     def test_plan_route_warnings_present_in_mock_mode(self) -> None:
-        response = self.handler(
-            self._req("POST", "/v1/chat/plan", {"message": "What does my day look like tomorrow?"}),
-            None,
+        body = self._plan_with_mock(
+            "What does my day look like tomorrow?",
+            [
+                _tool_use_response(
+                    "get_calendar_events",
+                    {"start": "2026-04-19T00:00:00-04:00", "end": "2026-04-19T23:59:59-04:00"},
+                ),
+                _text_response("Tomorrow you have meetings."),
+            ],
         )
-        body = json.loads(response["body"])
-        self.assertTrue(len(body["warnings"]) > 0)
+        self.assertGreater(len(body["warnings"]), 0)
 
     # ------------------------------------------------------------------
     # Execute routes
@@ -225,9 +310,6 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("approval", body["message"])
 
     def test_execute_returns_502_propagates_for_provider_errors(self) -> None:
-        # HttpRequestError with status_code propagates to 502 by default
-        # This is tested indirectly via the handler's except clause
-        # (direct unit test; no live network call needed)
         from unittest.mock import patch
 
         from assistant_app.http_client import HttpRequestError

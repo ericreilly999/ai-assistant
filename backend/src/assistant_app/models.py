@@ -93,6 +93,16 @@ class PlanResult:
         }
 
 
+class ToolInputError(Exception):
+    """Raised by a tool handler when required input fields are missing or invalid."""
+
+    def __init__(self, tool_name: str, field: str, reason: str) -> None:
+        self.tool_name = tool_name
+        self.field = field
+        self.reason = reason
+        super().__init__(f"[{tool_name}] Invalid input for field '{field}': {reason}")
+
+
 @dataclass(frozen=True)
 class ExecuteResult:
     message: str

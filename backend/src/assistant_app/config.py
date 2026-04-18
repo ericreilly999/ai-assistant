@@ -62,6 +62,9 @@ class AppConfig:
     plaid_secret: str = ""
     plaid_env: str = "sandbox"
 
+    # Agent loop configuration
+    max_agent_turns: int = 5
+
     # Computed: which providers have secrets available
     provider_secret_status: dict = field(default_factory=dict)
 
@@ -106,5 +109,6 @@ class AppConfig:
             plaid_client_id=os.getenv("PLAID_CLIENT_ID", ""),
             plaid_secret=os.getenv("PLAID_SECRET", ""),
             plaid_env=os.getenv("PLAID_ENV", "sandbox"),
+            max_agent_turns=int(os.getenv("MAX_AGENT_TURNS", "5")),
             provider_secret_status=_compute_provider_secret_status(),
         )
