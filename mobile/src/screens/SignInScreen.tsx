@@ -29,7 +29,10 @@ export function SignInScreen({ onSignedIn }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const redirectUri = AuthSession.makeRedirectUri();
+  // Redirect URI must match a registered callback URL in the Cognito app client.
+  // Native scheme 'ai-assistant://' must be registered in terraform/environments/*/terraform.tfvars
+  // callback_urls. For Expo Go dev testing, exp:// URIs must also be registered.
+  const redirectUri = AuthSession.makeRedirectUri({ native: 'ai-assistant://' });
   console.log("[Auth] redirectUri:", redirectUri);
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
