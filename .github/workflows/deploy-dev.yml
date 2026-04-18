@@ -131,6 +131,22 @@ jobs:
       - name: Terraform apply
         run: terraform -chdir=terraform/environments/dev apply -auto-approve tfplan
 
+      # ── Derive mobile API URL from Terraform outputs ────────────────────────
+      # Overwrites EXPO_PUBLIC_API_BASE_URL in mobile/.env so the value always
+      # matches the deployed stage rather than a manually maintained constant.
+      - name: Write EXPO_PUBLIC_API_BASE_URL to mobile/.env
+        run: |
+          BASE=$(terraform -chdir=terraform/environments/dev output -raw api_endpoint)
+          STAGE=$(terraform -chdir=terraform/environments/dev output -raw stage_name 2>/dev/null || echo "dev")
+          NEW_URL="$BASE/$STAGE"
+          # Replace existing key if present, otherwise append.
+          if grep -q "^EXPO_PUBLIC_API_BASE_URL=" mobile/.env; then
+            sed -i "s|^EXPO_PUBLIC_API_BASE_URL=.*|EXPO_PUBLIC_API_BASE_URL=$NEW_URL|" mobile/.env
+          else
+            echo "EXPO_PUBLIC_API_BASE_URL=$NEW_URL" >> mobile/.env
+          fi
+          echo "Set EXPO_PUBLIC_API_BASE_URL=$NEW_URL"
+
       # ── Post-deploy smoke test ──────────────────────────────────────────────
       # Capture the API endpoint from Terraform output and verify /health returns
       # HTTP 200. Retries up to 5 times (30 s apart) to allow Lambda cold start.

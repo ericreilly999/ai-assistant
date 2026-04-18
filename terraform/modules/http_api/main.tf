@@ -44,6 +44,14 @@ resource "aws_apigatewayv2_route" "this" {
   authorizer_id      = contains(tolist(var.protected_routes), each.value) && length(aws_apigatewayv2_authorizer.jwt) > 0 ? aws_apigatewayv2_authorizer.jwt[0].id : null
 }
 
+resource "aws_apigatewayv2_route" "default_catchall" {
+  api_id    = aws_apigatewayv2_api.this.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+
+  authorization_type = "NONE"
+}
+
 resource "aws_apigatewayv2_stage" "this" {
   api_id      = aws_apigatewayv2_api.this.id
   name        = var.stage_name
