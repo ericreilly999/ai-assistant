@@ -44,12 +44,19 @@ resource "aws_apigatewayv2_route" "this" {
   authorizer_id      = contains(tolist(var.protected_routes), each.value) && length(aws_apigatewayv2_authorizer.jwt) > 0 ? aws_apigatewayv2_authorizer.jwt[0].id : null
 }
 
+# $default catch-all: routes unmatched paths to Lambda so they return a structured JSON 404
+# instead of API Gateway's bare built-in "Not Found" string.
+#
+# IMPORTANT — deployment-order constraint: new protected routes must be added to var.routes
+# (and therefore get the JWT authorizer) before or at the same time as their Lambda handler
+# code is deployed. If a handler ships before the named route exists, that path is temporarily
+# reachable unauthenticated via this catch-all. Always deploy Terraform first, then Lambda.
 resource "aws_apigatewayv2_route" "default_catchall" {
-  api_id    = aws_apigatewayv2_api.this.id
-  route_key = "$default"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-
+  api_id             = aws_apigatewayv2_api.this.id
+  route_key          = "$default"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
   authorization_type = "NONE"
+  authorizer_id      = null
 }
 
 resource "aws_apigatewayv2_stage" "this" {
