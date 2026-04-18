@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 import time
 import uuid
-from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from assistant_app.bedrock_client import BedrockConverseRouter, BedrockGuardrail
 from assistant_app.config import AppConfig
 from assistant_app.consent import build_action_proposal, validate_execute_request
-from assistant_app.intent import META_HINTS, IntentClassification, classify_message, extract_grocery_items
-from assistant_app.models import CalendarEvent, ExecuteResult, PlanResult
+from assistant_app.models import CalendarEvent, ExecuteResult, PlanResult, ToolInputError
 from assistant_app.registry import ProviderRegistry
+from assistant_app.tool_definitions import build_tool_config
+from assistant_app.tool_handlers import ToolContext, dispatch
 
 if TYPE_CHECKING:
     from assistant_app.live_service import LocalIntegrationService
 
 logger = logging.getLogger(__name__)
+
+MAX_TURNS = 5
 
 
 class AssistantOrchestrator:
@@ -46,9 +47,10 @@ class AssistantOrchestrator:
         start = time.monotonic()
         message = (request_payload.get("message") or "").strip()
         provider_names = request_payload.get("providers") or self.registry.providers()
+        history = request_payload.get("history") or []
 
-        # Apply input guardrail before processing
-        passed, safe_message = self._guardrail.apply(message, source="INPUT")
+        # Apply input guardrail
+        passed, safe_message = self._guardrail.check(message, source="INPUT")
         if not passed:
             return PlanResult(
                 intent="blocked",
@@ -57,79 +59,210 @@ class AssistantOrchestrator:
             )
         message = safe_message
 
-        # Prefer Bedrock-based intent classification; fall back to keyword classifier
-        bedrock_classification = self._router.classify(message)
-        if bedrock_classification:
-            intent = IntentClassification(
-                domain=bedrock_classification.get("domain", "general"),
-                operation=bedrock_classification.get("operation", "read"),
-                requires_confirmation=bedrock_classification.get("requires_confirmation", False),
+        # Truncate history to last 10 turns
+        if len(history) > 10:
+            dropped = len(history) - 10
+            logger.debug(
+                "plan.history_truncated request_id=%s dropped=%d", request_id, dropped
             )
-        else:
-            intent = classify_message(message)
+            history = history[-10:]
 
-        # Override Bedrock or keyword classification for conversational meta-questions.
-        # Bedrock may not reliably distinguish capability questions from action requests.
-        if (
-            not intent.requires_confirmation
-            and intent.domain != "general"
-            and any(hint in message.strip().lower() for hint in META_HINTS)
-        ):
-            intent = IntentClassification(domain="general", operation="read", requires_confirmation=False)
+        # Build initial messages list
+        messages = []
+        for turn in history:
+            messages.append({"role": turn["role"], "content": [{"text": turn["content"]}]})
+        messages.append({"role": "user", "content": [{"text": message}]})
+
+        tools = build_tool_config(list(provider_names))
+        ctx = ToolContext(
+            config=self.config,
+            registry=self.registry,
+            live_service=self._live,
+            messages=messages,
+            proposals_accumulator=[],
+            sources_accumulator=[],
+        )
+
+        consecutive_errors = 0
+        turn_count = 0
 
         logger.info(
-            "plan.start request_id=%s intent=%s operation=%s providers=%s",
+            "plan.start request_id=%s providers=%s history_turns=%d",
             request_id,
-            intent.domain,
-            intent.operation,
-            provider_names,
+            list(provider_names),
+            len(history),
         )
 
         try:
-            if intent.domain == "calendar" and intent.operation == "read":
-                result = self._calendar_plan(provider_names)
-            elif intent.domain == "meeting_prep":
-                result = self._meeting_prep_plan(provider_names)
-            elif intent.domain == "grocery" and intent.operation == "write":
-                result = self._grocery_plan(message, provider_names)
-            elif intent.domain == "grocery":
-                result = PlanResult(
-                    intent="grocery",
-                    message=(
-                        "I can help you manage grocery lists. "
-                        "Tell me what items to add and I'll prepare a list for your approval."
-                    ),
-                    warnings=self._warnings(),
+            while True:
+                turn_count += 1
+                if turn_count > getattr(self.config, "max_agent_turns", MAX_TURNS):
+                    logger.error(
+                        "agent.turn_limit_exceeded request_id=%s turn_count=%d",
+                        request_id,
+                        turn_count - 1,
+                    )
+                    return PlanResult(
+                        intent="error",
+                        message=(
+                            "I was unable to complete your request — the agent loop exceeded "
+                            "the turn limit (maximum number of steps). "
+                            "Please try rephrasing your request."
+                        ),
+                        proposals=ctx.proposals_accumulator,
+                        warnings=["Agent turn limit exceeded."],
+                    )
+
+                response = self._router.agent_turn(
+                    messages, tools, {"maxTokens": 1024, "temperature": 0.0}
                 )
-            elif intent.domain == "travel" and intent.operation == "write":
-                result = self._travel_plan(provider_names)
-            elif intent.domain == "travel":
-                result = PlanResult(
-                    intent="travel",
-                    message=(
-                        "I can help you plan trips and create calendar holds. "
-                        "Tell me your destination and dates and I'll prepare a proposal."
-                    ),
-                    warnings=self._warnings(),
+
+                # Log token usage
+                usage = response.get("usage", {})
+                logger.info(
+                    "bedrock.token_usage request_id=%s turn=%d input_tokens=%d "
+                    "output_tokens=%d total_tokens=%d",
+                    request_id,
+                    turn_count,
+                    usage.get("inputTokens", 0),
+                    usage.get("outputTokens", 0),
+                    usage.get("inputTokens", 0) + usage.get("outputTokens", 0),
                 )
-            elif intent.domain == "tasks" and intent.operation == "write":
-                result = self._tasks_plan(message, provider_names)
-            elif intent.domain == "tasks":  # read / informational path
-                result = self._tasks_read_plan(provider_names)
-            else:
-                result = PlanResult(
-                    intent=intent.domain,
-                    message=(
-                        "I can help you with calendars, tasks, grocery lists, travel planning, "
-                        "and meeting preparation. Could you tell me more about what you need?"
-                    ),
-                    warnings=self._warnings(),
-                )
+
+                stop_reason = response.get("stopReason", "end_turn")
+                output_message = response.get("output", {}).get("message", {})
+
+                if stop_reason == "end_turn":
+                    # Extract text response
+                    text = ""
+                    for block in output_message.get("content", []):
+                        if "text" in block:
+                            text = block["text"]
+                            break
+
+                    # Apply output guardrail
+                    passed, safe_text = self._guardrail.check(text, source="OUTPUT")
+                    if not passed:
+                        return PlanResult(
+                            intent="blocked",
+                            message=safe_text,
+                            warnings=["Response blocked by content guardrail."],
+                        )
+
+                    return PlanResult(
+                        intent="agent",
+                        message=safe_text,
+                        proposals=ctx.proposals_accumulator,
+                        sources=ctx.sources_accumulator,
+                        warnings=self._warnings(),
+                    )
+
+                elif stop_reason == "tool_use":
+                    # Append assistant message
+                    messages.append(output_message)
+                    ctx.messages = messages
+
+                    # Process all tool use blocks
+                    tool_results = []
+                    for block in output_message.get("content", []):
+                        if "toolUse" not in block:
+                            continue
+                        tool_use = block["toolUse"]
+                        tool_use_id = tool_use["toolUseId"]
+                        tool_name = tool_use["name"]
+                        tool_input = tool_use.get("input", {})
+
+                        try:
+                            result = dispatch(tool_name, tool_input, ctx)
+                            is_error = result.get("isError", False)
+                            if is_error:
+                                consecutive_errors += 1
+                                tool_results.append({
+                                    "toolResult": {
+                                        "toolUseId": tool_use_id,
+                                        "content": [{"text": result.get("content", str(result))}],
+                                        "status": "error",
+                                    }
+                                })
+                            else:
+                                consecutive_errors = 0
+                                tool_results.append({
+                                    "toolResult": {
+                                        "toolUseId": tool_use_id,
+                                        "content": [{"json": result}],
+                                    }
+                                })
+                        except ToolInputError as e:
+                            consecutive_errors += 1
+                            logger.warning(
+                                "tool.input_error request_id=%s tool=%s field=%s",
+                                request_id,
+                                tool_name,
+                                e.field,
+                            )
+                            tool_results.append({
+                                "toolResult": {
+                                    "toolUseId": tool_use_id,
+                                    "content": [{"text": str(e)}],
+                                    "status": "error",
+                                }
+                            })
+                        except Exception as e:
+                            consecutive_errors += 1
+                            logger.warning(
+                                "tool.execution_error request_id=%s tool=%s error=%s",
+                                request_id,
+                                tool_name,
+                                e,
+                            )
+                            tool_results.append({
+                                "toolResult": {
+                                    "toolUseId": tool_use_id,
+                                    "content": [{"text": f"Tool execution failed: {e}"}],
+                                    "status": "error",
+                                }
+                            })
+
+                    if consecutive_errors >= 3:
+                        return PlanResult(
+                            intent="error",
+                            message="I encountered repeated errors processing your request. Please try again.",
+                            proposals=ctx.proposals_accumulator,
+                            warnings=["Repeated tool errors."],
+                        )
+
+                    # Append tool results as user message
+                    messages.append({"role": "user", "content": tool_results})
+                    ctx.messages = messages
+
+                else:
+                    logger.warning(
+                        "agent.unexpected_stop_reason request_id=%s stop_reason=%s",
+                        request_id,
+                        stop_reason,
+                    )
+                    return PlanResult(
+                        intent="error",
+                        message="I encountered an unexpected response. Please try again.",
+                        proposals=ctx.proposals_accumulator,
+                        warnings=[f"Unexpected stop reason: {stop_reason}"],
+                    )
+
+        except Exception as e:
+            logger.error("agent.bedrock_error request_id=%s error=%s", request_id, e)
+            return PlanResult(
+                intent="error",
+                message="I'm temporarily unavailable. Please try again in a moment.",
+                warnings=["Bedrock unavailable."],
+            )
         finally:
             latency_ms = int((time.monotonic() - start) * 1000)
-            logger.info("plan.done request_id=%s intent=%s latency_ms=%d", request_id, intent.domain, latency_ms)
-
-        return result
+            logger.info(
+                "plan.done request_id=%s latency_ms=%d turns=%d",
+                request_id,
+                latency_ms,
+                turn_count,
+            )
 
     def execute(self, request_payload: dict) -> ExecuteResult:
         request_id = str(uuid.uuid4())[:8]
@@ -227,324 +360,20 @@ class AssistantOrchestrator:
         raise ValueError(f"No live handler for provider={provider} action_type={action_type}.")
 
     # -------------------------------------------------------------------------
-    # Plan methods
+    # Helpers (still used by execute() path)
     # -------------------------------------------------------------------------
 
-    def _calendar_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        events: list[CalendarEvent] = []
-        sources: list[dict[str, str]] = []
-
-        if not self.config.mock_provider_mode and self._live is not None:
-            return self._live_calendar_plan(provider_names)
-
-        for provider_name in provider_names:
-            if provider_name not in {"google_calendar", "microsoft_calendar"}:
-                continue
-            adapter = self.registry.get(provider_name)
-            provider_events = adapter.list_mock_events()
-            events.extend(provider_events)
-            sources.append({"provider": provider_name, "type": "calendar"})
-
-        events.sort(key=lambda item: item.start)
-        schedule_lines = [self._format_event_line(event) for event in events]
-        schedule_text = "\n".join(schedule_lines) if schedule_lines else "No events found."
-        open_windows = self._compute_open_windows(events)
-        window_text = "\n".join(open_windows) if open_windows else "No open windows found."
-        message = (
-            "Tomorrow:\n"
-            f"{schedule_text}\n\n"
-            "Open windows:\n"
-            f"{window_text}\n\n"
-            "A gym session would fit in either window."
-        )
-        return PlanResult(intent="calendar", message=message, sources=sources, warnings=self._warnings())
-
-    def _live_calendar_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        assert self._live is not None
-        events: list[CalendarEvent] = []
-        sources: list[dict[str, str]] = []
-        provider_list = list(provider_names)
-
-        if "google_calendar" in provider_list:
-            try:
-                from datetime import timedelta
-
-                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                day_end = tomorrow.replace(hour=23, minute=59, second=59)
-                raw = self._live.list_google_calendar_events(
-                    tomorrow.isoformat(), day_end.isoformat()
-                )
-                adapter = self.registry.get("google_calendar")
-                for item in raw.get("events", []):
-                    with contextlib.suppress(Exception):
-                        events.append(adapter.normalize_event(item))
-                sources.append({"provider": "google_calendar", "type": "calendar"})
-            except Exception as exc:
-                logger.warning("google_calendar live fetch failed: %s", exc)
-
-        if "microsoft_calendar" in provider_list:
-            try:
-                from datetime import timedelta
-
-                tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-                day_end = tomorrow.replace(hour=23, minute=59, second=59)
-                raw = self._live.list_microsoft_calendar_events(
-                    tomorrow.isoformat(), day_end.isoformat()
-                )
-                adapter = self.registry.get("microsoft_calendar")
-                for item in raw.get("events", []):
-                    with contextlib.suppress(Exception):
-                        events.append(adapter.normalize_event(item))
-                sources.append({"provider": "microsoft_calendar", "type": "calendar"})
-            except Exception as exc:
-                logger.warning("microsoft_calendar live fetch failed: %s", exc)
-
-        events.sort(key=lambda item: item.start)
-        schedule_lines = [self._format_event_line(event) for event in events]
-        schedule_text = "\n".join(schedule_lines) if schedule_lines else "No events found."
-        open_windows = self._compute_open_windows(events)
-        window_text = "\n".join(open_windows) if open_windows else "No open windows found."
-        message = (
-            "Tomorrow:\n"
-            f"{schedule_text}\n\n"
-            "Open windows:\n"
-            f"{window_text}"
-        )
-        return PlanResult(intent="calendar", message=message, sources=sources, warnings=self._warnings())
-
-    def _meeting_prep_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        if not self.config.mock_provider_mode and self._live is not None:
-            return self._live_meeting_prep_plan(provider_names)
-        return self._mock_meeting_prep_plan(provider_names)
-
-    def _mock_meeting_prep_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        sources: list[dict[str, str]] = []
-        documents = []
-        if "google_drive" in provider_names:
-            documents = self.registry.get("google_drive").list_mock_documents()
-            sources.append({"provider": "google_drive", "type": "documents"})
-
-        if any(provider in provider_names for provider in ("google_calendar", "microsoft_calendar")):
-            sources.append({"provider": "calendar", "type": "calendar_context"})
-
-        document_titles = ", ".join(document.title for document in documents) if documents else "No linked docs"
-        message = (
-            "Architecture Review - 2:00 PM\n\n"
-            "Agenda highlights:\n"
-            "- migration to ECS\n"
-            "- load balancing strategy\n"
-            "- observability rollout\n\n"
-            "Key risks:\n"
-            "- container cold starts\n"
-            "- IAM permissions complexity\n\n"
-            f"Referenced documents: {document_titles}"
-        )
-        return PlanResult(intent="meeting_prep", message=message, sources=sources, warnings=self._warnings())
-
-    def _live_meeting_prep_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        """Meeting prep using real Drive documents and calendar context."""
-        assert self._live is not None
-        provider_list = list(provider_names)
-        sources: list[dict[str, str]] = []
-        document_titles: list[str] = []
-        document_summaries: list[str] = []
-
-        if "google_drive" in provider_list:
-            try:
-                raw = self._live.list_google_drive_documents(None)
-                docs = raw.get("documents", [])
-                sources.append({"provider": "google_drive", "type": "documents"})
-                for doc in docs[:5]:
-                    title = doc.get("title", "Untitled")
-                    document_titles.append(title)
-                    try:
-                        export = self._live.export_google_drive_document(doc["id"], "text/plain")
-                        snippet = (export.get("content") or "")[:500].strip()
-                        if snippet:
-                            document_summaries.append(f"**{title}**: {snippet[:200]}…")
-                    except Exception:
-                        document_summaries.append(f"**{title}**: (export unavailable)")
-            except Exception as exc:
-                logger.warning("google_drive live fetch failed: %s", exc)
-
-        if any(p in provider_list for p in ("google_calendar", "microsoft_calendar")):
-            sources.append({"provider": "calendar", "type": "calendar_context"})
-
-        titles_text = ", ".join(document_titles) if document_titles else "No linked documents found"
-        summaries_text = "\n".join(document_summaries) if document_summaries else ""
-
-        message = (
-            "Meeting Preparation\n\n"
-            f"Referenced documents: {titles_text}\n"
-        )
-        if summaries_text:
-            message += f"\nDocument excerpts:\n{summaries_text}\n"
-        message += (
-            "\nReview the linked documents above for full context before your meeting."
-        )
-
-        return PlanResult(intent="meeting_prep", message=message, sources=sources, warnings=self._warnings())
-
-    def _grocery_plan(self, message: str, provider_names: Iterable[str]) -> PlanResult:
-        task_provider = self._preferred_task_provider(provider_names)
-        items = extract_grocery_items(message)
-        payload = {"list_name": "Groceries", "items": items}
-        proposal = build_action_proposal(
-            provider=task_provider,
-            action_type="upsert_grocery_items",
-            resource_type="task_list",
-            payload=payload,
-            summary=f"Add {len(items)} item(s) to the Groceries list in {task_provider}.",
-            ttl_minutes=self.config.proposal_ttl_minutes,
-            message=message,
-        )
-        return PlanResult(
-            intent="grocery",
-            message=f"I prepared a grocery list proposal with {len(items)} item(s). Review and approve it before any write occurs.",
-            proposals=[proposal],
-            sources=[{"provider": task_provider, "type": "task_list"}],
-            warnings=self._warnings(),
-        )
-
-    def _travel_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        calendar_provider = self._preferred_calendar_provider(provider_names)
-        payload = {
-            "title": "Weekend Trip Placeholder",
-            "start": "2026-05-10T09:00:00-04:00",
-            "end": "2026-05-12T18:00:00-04:00",
-            "reminder_minutes": 120,
-        }
-        proposal = build_action_proposal(
-            provider=calendar_provider,
-            action_type="create_calendar_event",
-            resource_type="calendar_event",
-            payload=payload,
-            summary="Create a weekend-trip placeholder hold on the calendar.",
-            ttl_minutes=self.config.proposal_ttl_minutes,
-        )
-        message = (
-            "Best weekend: May 10-12\n\n"
-            "Draft itinerary:\n"
-            "- Friday: travel to Miami\n"
-            "- Saturday: beach and dinner\n"
-            "- Sunday: brunch and return\n\n"
-            "I also prepared a calendar-hold proposal for review."
-        )
-        return PlanResult(
-            intent="travel",
-            message=message,
-            proposals=[proposal],
-            sources=[{"provider": calendar_provider, "type": "calendar"}],
-            warnings=self._warnings(),
-        )
-
-    def _tasks_read_plan(self, provider_names: Iterable[str]) -> PlanResult:
-        """Return an informational response about available task providers.
-
-        This is the read path for the tasks domain. Only called when
-        intent.operation != "write". Does not generate proposals.
-        """
-        provider_list = list(provider_names)
-        task_provider = self._preferred_task_provider(provider_list)
-        connected = [p for p in provider_list if p in {"google_tasks", "microsoft_todo"}]
-        providers_text = ", ".join(connected) if connected else task_provider
-        message = (
-            f"I can access your task lists via: {providers_text}. "
-            "You can ask me to show your tasks, complete a task, update a task, or add new items."
-        )
-        return PlanResult(
-            intent="tasks",
-            message=message,
-            sources=[{"provider": task_provider, "type": "task_list"}],
-            warnings=self._warnings(),
-        )
-
-    def _tasks_plan(self, message: str, provider_names: Iterable[str]) -> PlanResult:
-        """Build a write-action proposal for task operations.
-
-        This method is write-only. Only call when intent.operation == "write".
-        For read or informational queries, use _tasks_read_plan instead.
-        """
-        task_provider = self._preferred_task_provider(provider_names)
-        normalized = message.lower()
-
-        payload: dict[str, Any]
-        if any(token in normalized for token in ("complete", "finish", "done", "check off")):
-            action_type = "complete_task"
-            summary = "Mark a task as complete."
-            payload = {"list_id": "", "task_id": "", "note": message}
-        elif any(token in normalized for token in ("update", "rename", "change", "edit")):
-            action_type = "update_task"
-            summary = "Update a task."
-            payload = {"list_id": "", "task_id": "", "updates": {}, "note": message}
-        else:
-            action_type = "update_task"
-            summary = "Update or complete a task."
-            payload = {"list_id": "", "task_id": "", "updates": {}, "note": message}
-
-        proposal = build_action_proposal(
-            provider=task_provider,
-            action_type=action_type,
-            resource_type="task",
-            payload=payload,
-            summary=summary,
-            ttl_minutes=self.config.proposal_ttl_minutes,
-            message=message,
-        )
-        return PlanResult(
-            intent="tasks",
-            message="I prepared a task-update proposal. Review and approve it before any write occurs.",
-            proposals=[proposal],
-            sources=[{"provider": task_provider, "type": "task_list"}],
-            warnings=self._warnings(),
-        )
-
-    # -------------------------------------------------------------------------
-    # Helpers
-    # -------------------------------------------------------------------------
-
-    def _preferred_task_provider(self, provider_names: Iterable[str]) -> str:
+    def _preferred_task_provider(self, provider_names) -> str:
         for provider_name in provider_names:
             if provider_name in {"google_tasks", "microsoft_todo"}:
                 return provider_name
         return "google_tasks"
 
-    def _preferred_calendar_provider(self, provider_names: Iterable[str]) -> str:
+    def _preferred_calendar_provider(self, provider_names) -> str:
         for provider_name in provider_names:
             if provider_name in {"google_calendar", "microsoft_calendar"}:
                 return provider_name
         return "google_calendar"
-
-    def _format_event_line(self, event: CalendarEvent) -> str:
-        start_time = event.start[11:16] if len(event.start) >= 16 else event.start
-        end_time = event.end[11:16] if len(event.end) >= 16 else event.end
-        return f"{start_time}-{end_time} {event.title}"
-
-    def _compute_open_windows(self, events: list[CalendarEvent]) -> list[str]:
-        """Return a simple list of open time windows between events (09:00-18:00 range)."""
-        busy: list[tuple[str, str]] = [(e.start[11:16], e.end[11:16]) for e in events
-                                        if len(e.start) >= 16 and len(e.end) >= 16]
-        busy.sort()
-
-        day_start = "09:00"
-        day_end = "18:00"
-        windows: list[str] = []
-        current = day_start
-
-        for start_t, end_t in busy:
-            if current < start_t:
-                windows.append(f"{current}-{start_t}")
-            if end_t > current:
-                current = end_t
-
-        if current < day_end:
-            windows.append(f"{current}-{day_end}")
-
-        return windows
 
     def _warnings(self) -> list[str]:
         if self.config.mock_provider_mode:

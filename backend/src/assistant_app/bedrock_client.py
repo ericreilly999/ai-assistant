@@ -4,6 +4,8 @@ import json
 import logging
 from typing import Any
 
+from assistant_app.tool_definitions import AGENT_SYSTEM_PROMPT
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +69,34 @@ class BedrockConverseRouter:
         except Exception as exc:
             logger.warning("Bedrock classify failed: %s", exc)
             return None
+
+    def agent_turn(
+        self,
+        messages: list[dict],
+        tools: dict,
+        inference_config: dict | None = None,
+    ) -> dict:
+        """Call Bedrock Converse with toolConfig and message history.
+
+        Returns the raw Bedrock response dict.
+        Raises RuntimeError if mock-router is used (inject MockBedrockAgent in tests).
+        """
+        if self.model_id == "mock-router":
+            raise RuntimeError(
+                "mock-router cannot be used with agent_turn; inject MockBedrockAgent in tests"
+            )
+        client = self._get_client()
+        if client is None:
+            raise RuntimeError("Bedrock client unavailable")
+        config = inference_config or {"maxTokens": 1024, "temperature": 0.0}
+        response = client.converse(
+            modelId=self.model_id,
+            system=[{"text": AGENT_SYSTEM_PROMPT}],
+            messages=messages,
+            toolConfig=tools,
+            inferenceConfig=config,
+        )
+        return response
 
     def generate_plan_text(self, intent_domain: str, context: str) -> str | None:
         """Generate a natural-language plan summary using Bedrock Converse.
@@ -162,3 +192,28 @@ class BedrockGuardrail:
         except Exception as exc:
             logger.warning("Bedrock guardrail apply failed: %s", exc)
             return True, text
+
+    # Alias so tests can patch either name
+    check = apply
+
+
+class MockBedrockAgent:
+    """Test double for BedrockConverseRouter. Replays pre-programmed turn responses."""
+
+    def __init__(self, turns: list[dict]) -> None:
+        self._turns = iter(turns)
+        self.calls: list[dict] = []  # captures (messages, tools) for each call
+
+    def agent_turn(
+        self,
+        messages: list[dict],
+        tools: dict,
+        inference_config: dict | None = None,
+    ) -> dict:
+        self.calls.append({"messages": messages, "tools": tools})
+        try:
+            return next(self._turns)
+        except StopIteration:
+            raise RuntimeError(
+                "MockBedrockAgent exhausted — more agent_turn calls than programmed turns"
+            )
