@@ -284,6 +284,22 @@ class OrchestratorThinkingTagStrippingTests(unittest.TestCase):
         self.assertNotIn("<thinking>", result.message)
         self.assertNotIn("<answer>", result.message)
 
+    def test_multiple_thinking_blocks_all_stripped(self) -> None:
+        """All <thinking> blocks must be stripped when the model returns more than one."""
+        orch = _make_orchestrator([
+            _text_response(
+                "<thinking>first</thinking>Hello<thinking>second</thinking> world"
+            ),
+        ])
+        result = orch.plan({"message": "What can you help me with?"})
+
+        self.assertEqual(result.intent, "agent")
+        self.assertEqual(result.message, "Hello world")
+        self.assertNotIn("<thinking>", result.message)
+        self.assertNotIn("</thinking>", result.message)
+        self.assertNotIn("first", result.message)
+        self.assertNotIn("second", result.message)
+
 
 class OrchestratorExecuteTests(unittest.TestCase):
     def setUp(self) -> None:
