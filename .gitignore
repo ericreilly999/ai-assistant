@@ -17,3 +17,4 @@ backend/.env.local
 backend/.local/
 .claude/settings.local.json
 tmpapigw_test.json
+project-status/
