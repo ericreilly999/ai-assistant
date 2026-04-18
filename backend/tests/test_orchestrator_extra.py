@@ -524,7 +524,7 @@ class TestToolUseContentBlockFiltering(unittest.TestCase):
         orch._router = MockBedrockAgent([mixed_response, _text_response("Here are your lists.")])
         result = orch.plan({"message": "Show me my tasks"})
         # Must not crash — the text block is ignored, the toolUse block is dispatched.
-        self.assertIn(result.intent, {"agent", "error"})
+        self.assertEqual(result.intent, "agent")
 
 
 class TestIsErrorDispatchResult(unittest.TestCase):

@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: pip install pytest pytest-cov
+        run: pip install -e "backend[test]"
       - name: Run backend unit tests
         run: |
           PYTHONPATH=backend/src python -m pytest backend/tests -v --tb=short \
