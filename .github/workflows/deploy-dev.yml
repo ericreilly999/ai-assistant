@@ -21,7 +21,8 @@ jobs:
           python-version: '3.12'
       - name: Run backend unit tests
         run: |
-          PYTHONPATH=backend/src python -m unittest discover -s backend/tests -t backend
+          pip install pytest pytest-cov
+          PYTHONPATH=backend/src python -m pytest backend/tests/ --cov=backend/src --cov-report=xml:backend/coverage.xml --cov-fail-under=80
 
   mobile-typecheck:
     runs-on: ubuntu-latest
