@@ -75,6 +75,7 @@ class PromptRegressionGoldenCases(unittest.TestCase):
 
         self.assertEqual(result.intent, "tasks")
         self.assertIn("task", result.message.lower())
+        self.assertEqual(len(result.proposals), 0)  # Read query must not propose a write action
 
     def test_tasks_write_intent(self) -> None:
         """Test: 'Create a task to review code' → tasks intent → propose action."""
@@ -206,6 +207,54 @@ class PromptRegressionGoldenCases(unittest.TestCase):
         })
 
         self.assertGreaterEqual(len(result.sources), 0)
+
+    def test_calendar_meta_question_returns_general(self) -> None:
+        """Conversational follow-up 'Which calendars are u checking?' must NOT
+        trigger a calendar data fetch. Regression: keyword classifier was matching
+        on 'calendar' token and running the full calendar read plan."""
+        result = self.orchestrator.plan({"message": "Which calendars are u checking?"})
+
+        # Must NOT return calendar schedule data
+        self.assertNotIn("Tomorrow", result.message)
+        self.assertNotIn("Open windows", result.message)
+        # Must NOT generate a write proposal
+        self.assertEqual(len(result.proposals), 0)
+        # Should route to general intent (META_HINTS pre-check catches 'which')
+        self.assertEqual(result.intent, "general")
+
+    def test_tasks_meta_question_no_proposal(self) -> None:
+        """'which task lists can you use?' is a capability question, not a write action.
+        Regression: _tasks_plan() had no read path and always emitted a write proposal."""
+        result = self.orchestrator.plan({
+            "message": "how about tasks. which task lists can you use?"
+        })
+
+        # Must NOT generate a write proposal
+        self.assertEqual(len(result.proposals), 0)
+        # Should be general or tasks read intent
+        self.assertIn(result.intent, {"general", "tasks"})
+
+    def test_tasks_read_no_proposal(self) -> None:
+        """'What are my tasks?' is a read query and must NOT generate a write proposal.
+        Regression: _tasks_plan() caught all tasks-domain messages including reads."""
+        result = self.orchestrator.plan({"message": "What are my tasks?"})
+
+        self.assertEqual(result.intent, "tasks")
+        self.assertEqual(len(result.proposals), 0)
+        self.assertIsNotNone(result.message)
+        self.assertGreater(len(result.message), 0)
+
+    def test_tasks_write_generates_proposal(self) -> None:
+        """'Update my task to review contracts' is a write intent and MUST
+        generate a proposal. Ensures the write path still works after the fix."""
+        result = self.orchestrator.plan({
+            "message": "Update my task to review contracts"
+        })
+
+        self.assertEqual(result.intent, "tasks")
+        self.assertGreaterEqual(len(result.proposals), 1)
+        proposal = result.proposals[0]
+        self.assertIn(proposal.action_type, {"update_task", "complete_task"})
 
 
 class PromptRegressionSecurityCases(unittest.TestCase):
