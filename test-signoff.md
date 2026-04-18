@@ -31,6 +31,12 @@
 **QA Engineer sign-off date**: —  
 **Notes**: Blocked on live provider credentials (Eric: T-13). T-10 Cognito domain is resolved — domain is live. T-12 automated checks complete; manual execution by Eric pending.
 
+**BLOCKER (2026-04-18) — Cognito sign-in flow: redirect URI mismatch after Expo SDK 54 upgrade.** The checklist item "Cognito sign-in flow completes via hosted UI" cannot be checked until the fix below is deployed and T-12 is re-run.
+- Root cause: `app.json` has `"scheme": "ai-assistant"` (added during SDK 54 upgrade). Expo SDK 54 changed `AuthSession.makeRedirectUri()` to return `ai-assistant://` in standalone/native builds when a custom scheme is defined. Cognito's `callback_urls` contained only `exp://` URIs so all OAuth redirects were rejected with "an error was encountered".
+- Application Engineer fix: `SignInScreen.tsx` updated to call `makeRedirectUri({ native: 'ai-assistant://' })` explicitly. Static analysis confirms this fix is in place (Test A passes).
+- DevOps fix required: `terraform/environments/dev/terraform.tfvars` `callback_urls` must include at least one `ai-assistant://` URI, and `terraform apply` must be re-run. Test B in `mobile/__tests__/redirectUri.config.test.ts` will fail until this is done.
+- Do not mark "Cognito sign-in flow completes via hosted UI" as passed until: (1) Terraform is updated and applied, (2) full test suite passes (including Test B), (3) Eric re-runs the T-12 manual sign-in step on device.
+
 ---
 
 ## T-12: Mock-Mode Smoke Test (Mobile → Lambda)
@@ -228,3 +234,78 @@ Expected: App returns to the sign-in screen. Stored tokens are cleared from Secu
 **Result**: ✅ Green — 122 tests passing  
 **Coverage**: backend unit tests, mobile unit tests, prompt regression suite  
 **Notes**: All CI checks green. Lambda artifact validated in pipeline.
+
+---
+
+## Postmortem — Redirect URI Mismatch (Expo SDK 54 Upgrade)
+
+**Date found**: 2026-04-18  
+**Found during**: T-12 manual smoke test (Stage 4 QA, dev environment)  
+**Severity**: Critical — all Cognito OAuth sign-in attempts blocked in standalone/native builds
+
+### What Was Found
+
+After the Expo SDK 53 → 54 upgrade, attempting to sign in via the Cognito hosted UI resulted in an "an error was encountered" error on the Cognito side. The OAuth flow never completed. The app remained on the sign-in screen with no visible error detail.
+
+### Root Cause
+
+Two separate changes combined to cause the failure:
+
+1. `app.json` had `"scheme": "ai-assistant"` added as part of the Expo SDK 54 upgrade preparation.
+2. Expo SDK 54 changed the default behaviour of `AuthSession.makeRedirectUri()`: when a custom `scheme` is defined in `app.json` and the execution environment is `standalone` or `bare`, the function returns `<scheme>://` instead of the previous default `exp://...` form used in Expo Go.
+
+The `makeRedirectUri()` call in `SignInScreen.tsx` was not passing the `native` parameter. Without `native`, SDK 54 resolved the URI using the manifest scheme, producing `ai-assistant://`. Cognito's registered `callback_urls` (in `terraform/environments/dev/terraform.tfvars`) contained only `exp://` URIs. Cognito rejected every redirect because `ai-assistant://` was not a registered callback URL.
+
+### Why Existing Tests Did Not Catch It
+
+The mobile unit tests in `mobile/__tests__/` mock `expo-auth-session` in its entirety. `makeRedirectUri()` was replaced with a jest mock returning a static string (`"myapp://redirect"`). As a result:
+
+- The test suite never called the real `makeRedirectUri()` implementation
+- No test validated what URI the function produces given the current `app.json` configuration
+- No test cross-referenced the produced URI against the Terraform `callback_urls` list
+- The SDK upgrade silently changed the real function's output without any test surface to detect it
+
+### What Was Fixed
+
+**Application code (Application Engineer):** `SignInScreen.tsx` updated to call `makeRedirectUri({ native: 'ai-assistant://' })` explicitly. The `native` parameter makes the return value deterministic in standalone/bare builds regardless of SDK version behaviour: when `native` is provided and the environment is standalone or bare, expo-auth-session returns the `native` value directly without any manifest resolution.
+
+**Infrastructure (DevOps Engineer — action required):** `terraform/environments/dev/terraform.tfvars` must be updated to add `ai-assistant://` to `callback_urls` and `terraform apply` must be re-run.
+
+### Test Coverage Added
+
+New test file: `mobile/__tests__/redirectUri.config.test.ts`
+
+**Test A — `makeRedirectUri` call uses `native` parameter with scheme from `app.json`** (4 tests, static analysis)  
+Reads `app.json` and `SignInScreen.tsx` source and asserts:
+- `app.json` defines a non-empty, RFC-valid URI scheme
+- `SignInScreen.tsx` calls `makeRedirectUri` with a `native` parameter present
+- The `native` value in the call matches `<scheme>://` from `app.json`
+
+Static analysis is used rather than calling the real SDK function, because `expo-constants` is a nested transitive dependency not directly mockable from the test environment without additional `moduleNameMapper` configuration. The static check is sufficient: it catches the exact mutation that caused the original bug (omitting `native` or using a wrong scheme string).
+
+**Test B — Terraform `callback_urls` includes the native scheme URI** (4 tests, configuration contract)  
+Reads `terraform/environments/dev/terraform.tfvars` and asserts:
+- The `callback_urls` list is non-empty
+- At least one entry starts with `<scheme>://` (the native URI from `app.json`)
+- All entries are valid non-empty strings
+- No duplicate entries exist
+
+This test will fail — and should fail — until the DevOps fix is applied.
+
+### Current Test Suite State (2026-04-18)
+
+| File | Tests | Status |
+|------|-------|--------|
+| `redirectUri.config.test.ts` (Test A) | 4 | PASS — application fix confirmed |
+| `redirectUri.config.test.ts` (Test B) | 3 pass, 1 fail | FAIL — Terraform fix pending |
+| All pre-existing mobile tests | 37 | PASS — no regressions |
+
+Test B will turn fully green once DevOps adds `ai-assistant://` to `terraform.tfvars` and applies.
+
+### Lessons Learned
+
+SDK upgrades that change the behaviour of authentication-critical functions must be treated as breaking changes. Any function that produces a URI used in an OAuth flow needs a test that:
+1. Exercises the real function (not a mock) against the real configuration files
+2. Cross-references the output against every registered callback URL list
+
+Mocking at the module boundary (as the existing tests do) is appropriate for testing component behaviour in isolation, but must be complemented by at least one integration-level test that exercises the real implementation path against live configuration.
