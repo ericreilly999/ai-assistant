@@ -18,17 +18,14 @@ MockBedrockAgent turn-sequence rationale is documented per test.
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
-
-from assistant_app.config import AppConfig
-from assistant_app.consent import payload_hash
-from assistant_app.orchestrator import AssistantOrchestrator
-from assistant_app.registry import ProviderRegistry
 
 # MockBedrockAgent is importable from bedrock_client after T-30 is implemented.
 # Until then, tests in this file that reference it will fail with ImportError.
 from assistant_app.bedrock_client import MockBedrockAgent
-
+from assistant_app.config import AppConfig
+from assistant_app.consent import payload_hash
+from assistant_app.orchestrator import AssistantOrchestrator
+from assistant_app.registry import ProviderRegistry
 
 # ---------------------------------------------------------------------------
 # Shared helpers

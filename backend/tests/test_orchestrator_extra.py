@@ -23,7 +23,6 @@ from assistant_app.consent import payload_hash
 from assistant_app.orchestrator import AssistantOrchestrator
 from assistant_app.registry import ProviderRegistry
 
-
 # ---------------------------------------------------------------------------
 # Helpers (mirrors pattern in test_orchestrator.py and test_agent_turns.py)
 # ---------------------------------------------------------------------------
@@ -282,7 +281,7 @@ class TestExecuteLiveProviderBranches(unittest.TestCase):
         orch, mock_live = self._make_live_orch()
         mock_live.complete_google_task.return_value = {"status": "completed"}
         payload = {"list_id": "list-1", "task_id": "task-1"}
-        result = orch.execute({
+        orch.execute({
             "approved": True,
             "provider": "google_tasks",
             "action_type": "complete_task",
@@ -299,7 +298,7 @@ class TestExecuteLiveProviderBranches(unittest.TestCase):
         orch, mock_live = self._make_live_orch()
         mock_live.add_microsoft_grocery_items.return_value = None
         payload = {"list_name": "Groceries", "items": ["bread"]}
-        result = orch.execute({
+        orch.execute({
             "approved": True,
             "provider": "microsoft_todo",
             "action_type": "upsert_grocery_items",
@@ -345,7 +344,7 @@ class TestExecuteLiveProviderBranches(unittest.TestCase):
             "provider": "google_calendar",
         }
         payload = {"summary": "Meeting", "start": {"dateTime": "2026-04-20T09:00:00Z"}}
-        result = orch.execute({
+        orch.execute({
             "approved": True,
             "provider": "google_calendar",
             "action_type": "create_calendar_event",
@@ -365,7 +364,7 @@ class TestExecuteLiveProviderBranches(unittest.TestCase):
             "provider": "microsoft_calendar",
         }
         payload = {"subject": "Meeting", "start": {"dateTime": "2026-04-20T09:00:00", "timeZone": "UTC"}}
-        result = orch.execute({
+        orch.execute({
             "approved": True,
             "provider": "microsoft_calendar",
             "action_type": "create_calendar_event",
@@ -488,7 +487,7 @@ class TestToolInputErrorTracking(unittest.TestCase):
         result = orch.plan({"message": "Do some work"})
         # With counter reset after turn 2, turn 3 error is only 1 consecutive — should not break
         # The agent should reach end_turn and return intent='agent'
-        self.assertIn(result.intent, {"agent", "error"})
+        self.assertEqual(result.intent, "agent")
 
 
 # ---------------------------------------------------------------------------

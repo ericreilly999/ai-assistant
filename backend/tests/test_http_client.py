@@ -26,7 +26,6 @@ from assistant_app.http_client import (
     http_post_form,
 )
 
-
 # ---------------------------------------------------------------------------
 # HttpRequestError
 # ---------------------------------------------------------------------------
@@ -99,9 +98,8 @@ class TestHttpGet(unittest.TestCase):
         self.assertEqual(result, {"key": "value"})
 
     def test_raises_http_request_error_on_http_error(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(404, b"not found")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_get("https://example.com/api")
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(404, b"not found")), self.assertRaises(HttpRequestError) as ctx:
+            http_get("https://example.com/api")
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertIn("not found", ctx.exception.body)
@@ -130,16 +128,14 @@ class TestHttpGet(unittest.TestCase):
         self.assertEqual(result, {"items": []})
 
     def test_raises_http_request_error_on_401(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(401, b"Unauthorized")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_get("https://example.com/protected")
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(401, b"Unauthorized")), self.assertRaises(HttpRequestError) as ctx:
+            http_get("https://example.com/protected")
 
         self.assertEqual(ctx.exception.status_code, 401)
 
     def test_raises_http_request_error_on_500(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(500, b"server error")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_get("https://example.com/api")
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(500, b"server error")), self.assertRaises(HttpRequestError) as ctx:
+            http_get("https://example.com/api")
 
         self.assertEqual(ctx.exception.status_code, 500)
 
@@ -151,7 +147,7 @@ class TestHttpGet(unittest.TestCase):
 class TestHttpGetText(unittest.TestCase):
 
     def test_returns_plain_text_on_success(self) -> None:
-        body = "Hello, world!".encode("utf-8")
+        body = b"Hello, world!"
         mock_resp = _make_mock_response(body)
 
         with patch("urllib.request.urlopen", return_value=mock_resp):
@@ -160,15 +156,14 @@ class TestHttpGetText(unittest.TestCase):
         self.assertEqual(result, "Hello, world!")
 
     def test_raises_http_request_error_on_http_error(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(403, b"forbidden")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_get_text("https://example.com/text")
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(403, b"forbidden")), self.assertRaises(HttpRequestError) as ctx:
+            http_get_text("https://example.com/text")
 
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertIn("forbidden", ctx.exception.body)
 
     def test_returns_utf8_decoded_string(self) -> None:
-        body = "café résumé".encode("utf-8")
+        body = "café résumé".encode()
         mock_resp = _make_mock_response(body)
 
         with patch("urllib.request.urlopen", return_value=mock_resp):
@@ -177,7 +172,7 @@ class TestHttpGetText(unittest.TestCase):
         self.assertEqual(result, "café résumé")
 
     def test_sends_headers_in_request(self) -> None:
-        body = "content".encode("utf-8")
+        body = b"content"
         mock_resp = _make_mock_response(body)
         captured: list[urllib.request.Request] = []
 
@@ -207,9 +202,8 @@ class TestHttpPost(unittest.TestCase):
         self.assertEqual(result, {"id": "new-item-1"})
 
     def test_raises_http_request_error_on_http_error(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(422, b"invalid data")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_post("https://example.com/items", {"bad": "data"})
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(422, b"invalid data")), self.assertRaises(HttpRequestError) as ctx:
+            http_post("https://example.com/items", {"bad": "data"})
 
         self.assertEqual(ctx.exception.status_code, 422)
 
@@ -291,9 +285,8 @@ class TestHttpPostForm(unittest.TestCase):
         self.assertEqual(result, {"access_token": "abc123"})
 
     def test_raises_http_request_error_on_http_error(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(400, b"bad request")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_post_form("https://example.com/token", {"grant_type": "bad"})
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(400, b"bad request")), self.assertRaises(HttpRequestError) as ctx:
+            http_post_form("https://example.com/token", {"grant_type": "bad"})
 
         self.assertEqual(ctx.exception.status_code, 400)
 
@@ -361,9 +354,8 @@ class TestHttpPatch(unittest.TestCase):
         self.assertEqual(result, {"status": "updated"})
 
     def test_raises_http_request_error_on_http_error(self) -> None:
-        with patch("urllib.request.urlopen", side_effect=_make_http_error(404, b"not found")):
-            with self.assertRaises(HttpRequestError) as ctx:
-                http_patch("https://example.com/tasks/999", {"status": "done"})
+        with patch("urllib.request.urlopen", side_effect=_make_http_error(404, b"not found")), self.assertRaises(HttpRequestError) as ctx:
+            http_patch("https://example.com/tasks/999", {"status": "done"})
 
         self.assertEqual(ctx.exception.status_code, 404)
 

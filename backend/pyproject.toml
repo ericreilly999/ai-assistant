@@ -8,6 +8,13 @@ version = "0.1.0"
 description = "AWS Lambda backend scaffold for the AI assistant MVP"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "boto3",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

@@ -4,12 +4,12 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from assistant_app.bedrock_client import BedrockConverseRouter, BedrockGuardrail
 from assistant_app.config import AppConfig
-from assistant_app.consent import build_action_proposal, validate_execute_request
-from assistant_app.models import CalendarEvent, ExecuteResult, PlanResult, ToolInputError
+from assistant_app.consent import validate_execute_request
+from assistant_app.models import ExecuteResult, PlanResult, ToolInputError
 from assistant_app.registry import ProviderRegistry
 from assistant_app.tool_definitions import build_tool_config
 from assistant_app.tool_handlers import ToolContext, dispatch

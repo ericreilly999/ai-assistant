@@ -27,7 +27,6 @@ from assistant_app.config import AppConfig
 from assistant_app.live_service import LocalIntegrationService
 from assistant_app.registry import ProviderRegistry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -344,12 +343,11 @@ class TestGoogleTasks(unittest.TestCase):
         svc._store = _google_store()
         list_response = {"items": [{"id": "list-groc", "title": "Groceries"}]}
 
-        with patch("assistant_app.live_service.http_get", return_value=list_response):
-            with patch("assistant_app.live_service.http_post", return_value={"id": "new-task"}):
-                result = svc.add_google_grocery_items({
-                    "list_name": "Groceries",
-                    "items": ["milk", "eggs"],
-                })
+        with patch("assistant_app.live_service.http_get", return_value=list_response), patch("assistant_app.live_service.http_post", return_value={"id": "new-task"}):
+            result = svc.add_google_grocery_items({
+                "list_name": "Groceries",
+                "items": ["milk", "eggs"],
+            })
 
         self.assertEqual(result["created_count"], 2)
         self.assertEqual(result["provider"], "google_tasks")
@@ -380,9 +378,8 @@ class TestGoogleTasks(unittest.TestCase):
     def test_resolve_tasklist_id_raises_when_no_lists(self) -> None:
         svc = _make_service()
         svc._store = _google_store()
-        with patch("assistant_app.live_service.http_get", return_value={"items": []}):
-            with self.assertRaises(ValueError) as ctx:
-                svc._resolve_google_tasklist_id("Groceries")
+        with patch("assistant_app.live_service.http_get", return_value={"items": []}), self.assertRaises(ValueError) as ctx:
+            svc._resolve_google_tasklist_id("Groceries")
         self.assertIn("No task list found", str(ctx.exception))
 
 
@@ -517,12 +514,11 @@ class TestMicrosoftTasks(unittest.TestCase):
         svc._store = _ms_store()
         list_response = {"value": [{"id": "ms-list-groc", "displayName": "Groceries"}]}
 
-        with patch("assistant_app.live_service.http_get", return_value=list_response):
-            with patch("assistant_app.live_service.http_post", return_value={"id": "new-ms-task"}):
-                result = svc.add_microsoft_grocery_items({
-                    "list_name": "Groceries",
-                    "items": ["milk", "eggs", "butter"],
-                })
+        with patch("assistant_app.live_service.http_get", return_value=list_response), patch("assistant_app.live_service.http_post", return_value={"id": "new-ms-task"}):
+            result = svc.add_microsoft_grocery_items({
+                "list_name": "Groceries",
+                "items": ["milk", "eggs", "butter"],
+            })
 
         self.assertEqual(result["created_count"], 3)
         self.assertEqual(result["provider"], "microsoft_todo")
@@ -553,9 +549,8 @@ class TestMicrosoftTasks(unittest.TestCase):
     def test_resolve_ms_tasklist_id_raises_when_no_lists(self) -> None:
         svc = _make_service()
         svc._store = _ms_store()
-        with patch("assistant_app.live_service.http_get", return_value={"value": []}):
-            with self.assertRaises(ValueError) as ctx:
-                svc._resolve_ms_tasklist_id("Groceries")
+        with patch("assistant_app.live_service.http_get", return_value={"value": []}), self.assertRaises(ValueError) as ctx:
+            svc._resolve_ms_tasklist_id("Groceries")
         self.assertIn("No Microsoft To Do list found", str(ctx.exception))
 
 
