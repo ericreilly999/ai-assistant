@@ -133,7 +133,7 @@
 **Deployed by**: GitHub Actions (OIDC → IAM role `ai-assistant-github-actions-deploy`)  
 **Change**: Added `ai-assistant://` to Cognito app client `callback_urls` and `logout_urls`. This is the native OAuth redirect URI emitted by `AuthSession.makeRedirectUri({ native: 'ai-assistant://' })` after the Expo SDK 54 upgrade changed the app scheme. Without this registration, Cognito hosted UI rejected the redirect with "an error was encountered", blocking T-12.  
 **Root cause ref**: PR #7 — `fix(mobile): make Cognito redirect URI scheme explicit — ai-assistant://`  
-**Result**: ⏳ Pending CI run
+**Result**: ✅ Success — Terraform apply succeeded (1 changed, 0 destroyed), smoke test `GET /health` returned HTTP 200 on first attempt
 
 **GitHub Actions variables updated (dev environment):**
 
