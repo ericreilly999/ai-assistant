@@ -126,6 +126,37 @@
 
 ---
 
+### Deploy #6 — Register ai-assistant:// Native Scheme in Cognito Callback URLs
+**Date**: 2026-04-18  
+**Environment**: dev  
+**Triggered by**: Push to `main` → CI/CD pipeline (`.github/workflows/deploy-dev.yml`)  
+**Deployed by**: GitHub Actions (OIDC → IAM role `ai-assistant-github-actions-deploy`)  
+**Change**: Added `ai-assistant://` to Cognito app client `callback_urls` and `logout_urls`. This is the native OAuth redirect URI emitted by `AuthSession.makeRedirectUri({ native: 'ai-assistant://' })` after the Expo SDK 54 upgrade changed the app scheme. Without this registration, Cognito hosted UI rejected the redirect with "an error was encountered", blocking T-12.  
+**Root cause ref**: PR #7 — `fix(mobile): make Cognito redirect URI scheme explicit — ai-assistant://`  
+**Result**: ⏳ Pending CI run
+
+**GitHub Actions variables updated (dev environment):**
+
+| Variable | Before | After |
+|---|---|---|
+| `TF_CALLBACK_URLS` | `..., "exp://192.168.1.92:8081/--/"` | `..., "exp://192.168.1.92:8081/--/", "ai-assistant://"` |
+| `TF_LOGOUT_URLS` | `..., "exp://192.168.1.92:8081"` | `..., "exp://192.168.1.92:8081", "ai-assistant://"` |
+
+**Cognito App Client Callback URLs after this deploy:**
+- `exp://localhost:8081` and `exp://localhost:8081/--/`
+- `exp://127.0.0.1:8081` and `exp://127.0.0.1:8081/--/`
+- `exp://10.0.2.2:8081` and `exp://10.0.2.2:8081/--/`
+- `exp://192.168.1.92:8081` and `exp://192.168.1.92:8081/--/`
+- `ai-assistant://` ← new
+
+**Cognito App Client Logout URLs after this deploy:**
+- `exp://localhost:8081`, `exp://127.0.0.1:8081`, `exp://10.0.2.2:8081`, `exp://192.168.1.92:8081`
+- `ai-assistant://` ← new
+
+**Notes**: Unblocks T-12 native OAuth sign-in. QA contract test `mobile/__tests__/redirectUri.config.test.ts` Test B (verifies `ai-assistant://` is present in registered callback URLs) will pass once this deploy completes. T-12 smoke test can proceed immediately after.
+
+---
+
 ## Staging Environment
 
 **Status**: ❌ Not yet deployed  
