@@ -21,6 +21,18 @@ WRITE_HINTS = (
     "edit",
 )
 
+META_HINTS = (
+    "which",
+    "what can you",
+    "what do you",
+    "how about",
+    "are you",
+    "do you",
+    "can you",
+    "what providers",
+    "what integrations",
+)
+
 
 @dataclass(frozen=True)
 class IntentClassification:
@@ -32,6 +44,9 @@ class IntentClassification:
 def classify_message(message: str) -> IntentClassification:
     normalized = message.strip().lower()
     requires_confirmation = any(token in normalized for token in WRITE_HINTS)
+
+    if not requires_confirmation and any(hint in normalized for hint in META_HINTS):
+        return IntentClassification("general", "read", False)
 
     if any(token in normalized for token in ("grocery", "groceries", "dinner", "meal")):
         return IntentClassification("grocery", "write" if requires_confirmation else "read", requires_confirmation)

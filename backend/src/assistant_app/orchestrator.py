@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from assistant_app.bedrock_client import BedrockConverseRouter, BedrockGuardrail
 from assistant_app.config import AppConfig
 from assistant_app.consent import build_action_proposal, validate_execute_request
-from assistant_app.intent import IntentClassification, classify_message, extract_grocery_items
+from assistant_app.intent import META_HINTS, IntentClassification, classify_message, extract_grocery_items
 from assistant_app.models import CalendarEvent, ExecuteResult, PlanResult
 from assistant_app.registry import ProviderRegistry
 
@@ -68,6 +68,15 @@ class AssistantOrchestrator:
         else:
             intent = classify_message(message)
 
+        # Override Bedrock or keyword classification for conversational meta-questions.
+        # Bedrock may not reliably distinguish capability questions from action requests.
+        if (
+            not intent.requires_confirmation
+            and intent.domain != "general"
+            and any(hint in message.strip().lower() for hint in META_HINTS)
+        ):
+            intent = IntentClassification(domain="general", operation="read", requires_confirmation=False)
+
         logger.info(
             "plan.start request_id=%s intent=%s operation=%s providers=%s",
             request_id,
@@ -81,12 +90,32 @@ class AssistantOrchestrator:
                 result = self._calendar_plan(provider_names)
             elif intent.domain == "meeting_prep":
                 result = self._meeting_prep_plan(provider_names)
-            elif intent.domain == "grocery":
+            elif intent.domain == "grocery" and intent.operation == "write":
                 result = self._grocery_plan(message, provider_names)
-            elif intent.domain == "travel":
+            elif intent.domain == "grocery":
+                result = PlanResult(
+                    intent="grocery",
+                    message=(
+                        "I can help you manage grocery lists. "
+                        "Tell me what items to add and I'll prepare a list for your approval."
+                    ),
+                    warnings=self._warnings(),
+                )
+            elif intent.domain == "travel" and intent.operation == "write":
                 result = self._travel_plan(provider_names)
-            elif intent.domain == "tasks":
+            elif intent.domain == "travel":
+                result = PlanResult(
+                    intent="travel",
+                    message=(
+                        "I can help you plan trips and create calendar holds. "
+                        "Tell me your destination and dates and I'll prepare a proposal."
+                    ),
+                    warnings=self._warnings(),
+                )
+            elif intent.domain == "tasks" and intent.operation == "write":
                 result = self._tasks_plan(message, provider_names)
+            elif intent.domain == "tasks":  # read / informational path
+                result = self._tasks_read_plan(provider_names)
             else:
                 result = PlanResult(
                     intent=intent.domain,
@@ -413,7 +442,33 @@ class AssistantOrchestrator:
             warnings=self._warnings(),
         )
 
+    def _tasks_read_plan(self, provider_names: Iterable[str]) -> PlanResult:
+        """Return an informational response about available task providers.
+
+        This is the read path for the tasks domain. Only called when
+        intent.operation != "write". Does not generate proposals.
+        """
+        provider_list = list(provider_names)
+        task_provider = self._preferred_task_provider(provider_list)
+        connected = [p for p in provider_list if p in {"google_tasks", "microsoft_todo"}]
+        providers_text = ", ".join(connected) if connected else task_provider
+        message = (
+            f"I can access your task lists via: {providers_text}. "
+            "You can ask me to show your tasks, complete a task, update a task, or add new items."
+        )
+        return PlanResult(
+            intent="tasks",
+            message=message,
+            sources=[{"provider": task_provider, "type": "task_list"}],
+            warnings=self._warnings(),
+        )
+
     def _tasks_plan(self, message: str, provider_names: Iterable[str]) -> PlanResult:
+        """Build a write-action proposal for task operations.
+
+        This method is write-only. Only call when intent.operation == "write".
+        For read or informational queries, use _tasks_read_plan instead.
+        """
         task_provider = self._preferred_task_provider(provider_names)
         normalized = message.lower()
 

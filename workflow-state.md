@@ -12,8 +12,8 @@
 ## Current Stage
 
 **Stage**: 4 — QA Validation (Dev Environment)  
-**Status**: Blocked — Cognito auth failure discovered during T-12 manual smoke test  
-**Active agent**: Application Engineer (code fix) + QA Engineer (test coverage + postmortem)  
+**Status**: In Progress — Cognito auth fix deployed, T-12 unblocked  
+**Active agent**: None — awaiting Eric manual action (T-12 smoke test)  
 **Started**: 2026-04-08
 
 ---
@@ -35,17 +35,23 @@
 
 ## Next Action
 
-1. **Application Engineer** — fix `makeRedirectUri()` scheme handling in `mobile/src/lib/auth.ts` and `mobile/src/screens/SignInScreen.tsx`; open PR
-2. **QA Engineer** — write tests covering auth redirect URI configuration; postmortem on test gap
-3. **Code Reviewer** — review App Engineer PR
-4. **DevOps Engineer** — register `ai-assistant://` in Cognito callback URLs via Terraform + GitHub Actions variable update; re-deploy
-5. **Eric (human)** — re-run T-12 manual smoke test once fix is deployed
+**Eric (human action)** — T-12 manual smoke test. All blockers resolved.
+
+Steps:
+1. `cd mobile && npx expo start`
+2. Press `i` (iOS Simulator), `a` (Android Emulator), or scan QR with Expo Go
+3. Tap Sign In → complete Cognito hosted UI sign-in
+4. Send a read query → confirm mock response
+5. Send a write intent → confirm proposal card renders → Approve
+6. Send another write intent → Reject → confirm "Action cancelled"
+7. Sign Out
+
+Full pass/fail criteria in `test-signoff.md` Phase 4.
+
+After T-12 passes: **QA Engineer** runs T-16 (provider OAuth flows) and T-17 (full live end-to-end test + Stage 4 sign-off).
 
 ---
 
 ## Active Blockers
 
-**Blocker**: Cognito sign-in fails — `ai-assistant://` redirect URI not registered in Cognito app client callback URLs.  
-**Root cause**: `"scheme": "ai-assistant"` added to `app.json` during Expo SDK 54 upgrade silently changed `makeRedirectUri()` output from `exp://...` to `ai-assistant://`. Cognito only has `exp://` URIs registered.  
-**Resolution owner**: Application Engineer (code) + DevOps Engineer (Terraform)  
-**Status**: Application Engineer and QA Engineer invoked — fix in progress.
+None — all blockers resolved. `ai-assistant://` registered in Cognito (Deploy #6, 2026-04-18). T-12 awaits Eric's execution.
