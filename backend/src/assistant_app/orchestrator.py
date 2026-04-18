@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -139,6 +140,11 @@ class AssistantOrchestrator:
                         if "text" in block:
                             text = block["text"]
                             break
+
+                    # Strip inline reasoning tags emitted by thinking-capable models (e.g. Nova Pro)
+                    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL).strip()
+                    # Unwrap <answer> wrapper tags Nova Pro may emit around the final response
+                    text = re.sub(r"<answer>(.*?)</answer>", r"\1", text, flags=re.DOTALL).strip()
 
                     # Apply output guardrail
                     passed, safe_text = self._guardrail.check(text, source="OUTPUT")

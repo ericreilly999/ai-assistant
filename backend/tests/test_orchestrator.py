@@ -239,6 +239,52 @@ class OrchestratorPlanTests(unittest.TestCase):
         self.assertGreaterEqual(len(result.sources), 0)
 
 
+class OrchestratorThinkingTagStrippingTests(unittest.TestCase):
+    """Tests that inline thinking/answer tags from Nova Pro are stripped before
+    the message reaches PlanResult."""
+
+    def test_thinking_tags_are_stripped(self) -> None:
+        """Nova Pro <thinking>...</thinking> block must not appear in result.message."""
+        orch = _make_orchestrator([
+            _text_response(
+                "<thinking>Some internal reasoning here</thinking>\n\nThe actual answer."
+            ),
+        ])
+        result = orch.plan({"message": "What can you help me with?"})
+
+        self.assertEqual(result.intent, "agent")
+        self.assertEqual(result.message, "The actual answer.")
+        self.assertNotIn("<thinking>", result.message)
+
+    def test_answer_wrapper_tags_are_stripped(self) -> None:
+        """Nova Pro <answer>...</answer> wrapper must be unwrapped in result.message."""
+        orch = _make_orchestrator([
+            _text_response(
+                "<answer>The actual answer.</answer>"
+            ),
+        ])
+        result = orch.plan({"message": "What can you help me with?"})
+
+        self.assertEqual(result.intent, "agent")
+        self.assertEqual(result.message, "The actual answer.")
+        self.assertNotIn("<answer>", result.message)
+        self.assertNotIn("</answer>", result.message)
+
+    def test_thinking_and_answer_tags_stripped_together(self) -> None:
+        """Both <thinking> and <answer> tags stripped when present in one response."""
+        orch = _make_orchestrator([
+            _text_response(
+                "<thinking>Internal reasoning.</thinking>\n\n<answer>Clean response.</answer>"
+            ),
+        ])
+        result = orch.plan({"message": "What can you help me with?"})
+
+        self.assertEqual(result.intent, "agent")
+        self.assertEqual(result.message, "Clean response.")
+        self.assertNotIn("<thinking>", result.message)
+        self.assertNotIn("<answer>", result.message)
+
+
 class OrchestratorExecuteTests(unittest.TestCase):
     def setUp(self) -> None:
         self.orchestrator = AssistantOrchestrator(_make_config(), ProviderRegistry(mock_mode=True))

@@ -134,7 +134,7 @@ export function ChatScreen({ tokens, onSignOut, onAuthError }: Props) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Assistant</Text>
+          <Text style={styles.headerTitle}>integreat</Text>
           <TouchableOpacity testID="sign-out-button" onPress={handleSignOut} style={styles.signOutButton}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>

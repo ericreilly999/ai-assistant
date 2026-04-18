@@ -1,4 +1,4 @@
-# AI Assistant MVP
+# integreat
 
 A mobile-first personal assistant that accepts natural-language requests, reasons across Google (Calendar, Tasks, Drive), Microsoft 365 (Calendar, To Do), and Plaid (banking), and returns either a direct answer or a reviewable action proposal that requires explicit user approval before any write is performed. The backend runs on AWS Lambda with Amazon Bedrock for intent routing and guardrails. All infrastructure is managed with Terraform.
 
