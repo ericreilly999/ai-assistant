@@ -149,21 +149,67 @@ class ToolContext:
 # ---------------------------------------------------------------------------
 
 
+def _get_tool_use_ids_by_name(messages: list[dict], tool_name: str) -> set[str]:
+    """Collect all toolUseId values from assistant messages where tool name matches."""
+    tool_use_ids: set[str] = set()
+    for msg in messages:
+        if msg.get("role") != "assistant":
+            continue
+        for content_block in msg.get("content", []):
+            tool_use = content_block.get("toolUse", {})
+            if tool_use.get("name") == tool_name:
+                use_id = tool_use.get("toolUseId")
+                if use_id:
+                    tool_use_ids.add(use_id)
+    return tool_use_ids
+
+
 def _extract_prior_task_ids(messages: list[dict]) -> set[str]:
-    """Scan messages for get_tasks toolResult blocks and extract task IDs."""
+    """Scan messages for get_tasks toolResult blocks and extract task IDs.
+
+    Only extracts IDs from toolResult blocks whose corresponding toolUse
+    was a get_tasks call (matched by toolUseId).
+    """
+    get_tasks_use_ids = _get_tool_use_ids_by_name(messages, "get_tasks")
     task_ids: set[str] = set()
     for msg in messages:
         if msg.get("role") != "user":
             continue
         for content_block in msg.get("content", []):
             tool_result = content_block.get("toolResult", {})
-            # Extract task IDs from any toolResult that contains a tasks list
+            # Only consider results from get_tasks calls
+            if tool_result.get("toolUseId") not in get_tasks_use_ids:
+                continue
             for result_content in tool_result.get("content", []):
                 data = result_content.get("json", {})
                 for task in data.get("tasks", []):
                     if task.get("id"):
                         task_ids.add(task["id"])
     return task_ids
+
+
+def _extract_prior_list_ids(messages: list[dict]) -> set[str]:
+    """Scan messages for get_task_lists toolResult blocks and extract list IDs.
+
+    Only extracts IDs from toolResult blocks whose corresponding toolUse
+    was a get_task_lists call (matched by toolUseId).
+    """
+    get_task_lists_use_ids = _get_tool_use_ids_by_name(messages, "get_task_lists")
+    list_ids: set[str] = set()
+    for msg in messages:
+        if msg.get("role") != "user":
+            continue
+        for content_block in msg.get("content", []):
+            tool_result = content_block.get("toolResult", {})
+            # Only consider results from get_task_lists calls
+            if tool_result.get("toolUseId") not in get_task_lists_use_ids:
+                continue
+            for result_content in tool_result.get("content", []):
+                data = result_content.get("json", {})
+                for task_list in data.get("task_lists", []):
+                    if task_list.get("id"):
+                        list_ids.add(task_list["id"])
+    return list_ids
 
 
 # ---------------------------------------------------------------------------
@@ -414,6 +460,21 @@ def handle_propose_task_update(tool_input: dict, ctx: ToolContext) -> dict:
         raise ToolInputError("propose_task_update", "updates", "updates is required")
 
     task_id: str = tool_input["task_id"]
+    list_id: str = tool_input["list_id"]
+
+    # ID validation: list_id must come from a prior get_task_lists result
+    prior_list_ids = _extract_prior_list_ids(ctx.messages)
+    if list_id not in prior_list_ids:
+        logger.warning(
+            "hallucinated_id_blocked tool=propose_task_update list_id=%s", list_id
+        )
+        return {
+            "isError": True,
+            "content": (
+                "list_id must come from a get_task_lists result. "
+                "Please call get_task_lists then get_tasks first."
+            ),
+        }
 
     # ID validation: task_id must come from a prior get_tasks result
     prior_task_ids = _extract_prior_task_ids(ctx.messages)
@@ -468,6 +529,21 @@ def handle_propose_task_complete(tool_input: dict, ctx: ToolContext) -> dict:
         raise ToolInputError("propose_task_complete", "task_id", "task_id is required")
 
     task_id: str = tool_input["task_id"]
+    list_id: str = tool_input["list_id"]
+
+    # ID validation: list_id must come from a prior get_task_lists result
+    prior_list_ids = _extract_prior_list_ids(ctx.messages)
+    if list_id not in prior_list_ids:
+        logger.warning(
+            "hallucinated_id_blocked tool=propose_task_complete list_id=%s", list_id
+        )
+        return {
+            "isError": True,
+            "content": (
+                "list_id must come from a get_task_lists result. "
+                "Please call get_task_lists then get_tasks first."
+            ),
+        }
 
     # ID validation: task_id must come from a prior get_tasks result
     prior_task_ids = _extract_prior_task_ids(ctx.messages)
@@ -486,7 +562,7 @@ def handle_propose_task_complete(tool_input: dict, ctx: ToolContext) -> dict:
     provider = tool_input.get("provider") or _preferred_task_provider(ctx)
 
     payload: dict[str, Any] = {
-        "list_id": tool_input["list_id"],
+        "list_id": list_id,
         "task_id": task_id,
     }
 

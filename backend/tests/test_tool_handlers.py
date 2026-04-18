@@ -165,6 +165,66 @@ def _make_prior_get_tasks_messages(
     return [prior_tool_use, prior_tool_result]
 
 
+def _make_prior_get_task_lists_messages(
+    tool_use_id: str = "lists-001",
+    task_lists: list[dict] | None = None,
+) -> list[dict]:
+    """Build a realistic messages list containing a prior get_task_lists tool result.
+
+    The format mirrors the Bedrock Converse message format so that the
+    list_id validation logic in propose_task_update / propose_task_complete
+    can find real list IDs in context.
+    """
+    if task_lists is None:
+        task_lists = [
+            {"id": "list-001", "name": "My Tasks"},
+            {"id": "list-002", "name": "Work"},
+        ]
+
+    prior_tool_use = {
+        "role": "assistant",
+        "content": [
+            {
+                "toolUse": {
+                    "toolUseId": tool_use_id,
+                    "name": "get_task_lists",
+                    "input": {},
+                }
+            }
+        ],
+    }
+    prior_tool_result = {
+        "role": "user",
+        "content": [
+            {
+                "toolResult": {
+                    "toolUseId": tool_use_id,
+                    "content": [
+                        {
+                            "json": {
+                                "task_lists": task_lists,
+                                "provider": "google_tasks",
+                            }
+                        }
+                    ],
+                }
+            }
+        ],
+    }
+    return [prior_tool_use, prior_tool_result]
+
+
+def _make_prior_get_task_lists_and_tasks_messages() -> list[dict]:
+    """Build a messages list with both a prior get_task_lists and get_tasks result.
+
+    Used for tests that need valid list_id AND task_id in context.
+    """
+    return (
+        _make_prior_get_task_lists_messages()
+        + _make_prior_get_tasks_messages()
+    )
+
+
 # ---------------------------------------------------------------------------
 # get_calendar_events
 # ---------------------------------------------------------------------------
@@ -579,7 +639,9 @@ class TestHandleProposeTaskUpdate(unittest.TestCase):
     without prior get_tasks result returns isError."""
 
     def _ctx_with_prior_get_tasks(self) -> ToolContext:
-        messages = _make_prior_get_tasks_messages()
+        # Include both get_task_lists and get_tasks results so both list_id
+        # and task_id validation pass.
+        messages = _make_prior_get_task_lists_and_tasks_messages()
         return _make_ctx(messages=messages)
 
     def test_handle_propose_task_update_appends_one_proposal(self) -> None:
@@ -714,6 +776,49 @@ class TestHandleProposeTaskUpdate(unittest.TestCase):
         )
         self.assertEqual(len(ctx.proposals_accumulator), 0)
 
+    def test_handle_propose_task_update_rejects_list_id_not_from_get_task_lists(self) -> None:
+        """list_id not present in any prior get_task_lists result must return isError."""
+        # Provide only a get_tasks result — no get_task_lists result in context.
+        messages = _make_prior_get_tasks_messages()
+        ctx = _make_ctx(messages=messages)
+        result = handle_propose_task_update(
+            {
+                "list_id": "list-001",
+                "task_id": "task-001",
+                "updates": {"title": "Urgent"},
+            },
+            ctx,
+        )
+        self.assertIs(
+            result.get("isError"),
+            True,
+            msg="propose_task_update must reject a list_id not from a prior get_task_lists result.",
+        )
+        self.assertIn(
+            "get_task_lists",
+            str(result.get("content", "")),
+            msg="Error message must reference 'get_task_lists'.",
+        )
+
+    def test_handle_propose_task_update_accepts_valid_list_id_from_get_task_lists(self) -> None:
+        """list_id present in a prior get_task_lists result (alongside valid task_id) must succeed."""
+        messages = _make_prior_get_task_lists_and_tasks_messages()
+        ctx = _make_ctx(messages=messages)
+        result = handle_propose_task_update(
+            {
+                "list_id": "list-001",
+                "task_id": "task-001",
+                "updates": {"title": "Reviewed"},
+            },
+            ctx,
+        )
+        self.assertIs(
+            result.get("proposal_created"),
+            True,
+            msg="propose_task_update must succeed when list_id comes from a prior get_task_lists result.",
+        )
+        self.assertEqual(len(ctx.proposals_accumulator), 1)
+
 
 # ---------------------------------------------------------------------------
 # propose_task_complete
@@ -725,7 +830,9 @@ class TestHandleProposeTaskComplete(unittest.TestCase):
     without prior get_tasks returns isError."""
 
     def _ctx_with_prior_get_tasks(self) -> ToolContext:
-        messages = _make_prior_get_tasks_messages()
+        # Include both get_task_lists and get_tasks results so both list_id
+        # and task_id validation pass.
+        messages = _make_prior_get_task_lists_and_tasks_messages()
         return _make_ctx(messages=messages)
 
     def test_handle_propose_task_complete_appends_one_proposal(self) -> None:
@@ -795,6 +902,26 @@ class TestHandleProposeTaskComplete(unittest.TestCase):
             {"list_id": "list-001", "task_id": "task-002"}, ctx
         )
         self.assertEqual(len(ctx.proposals_accumulator), 0)
+
+    def test_handle_propose_task_complete_rejects_list_id_not_from_get_task_lists(self) -> None:
+        """list_id not present in any prior get_task_lists result must return isError."""
+        # Provide only a get_tasks result — no get_task_lists result in context.
+        messages = _make_prior_get_tasks_messages()
+        ctx = _make_ctx(messages=messages)
+        result = handle_propose_task_complete(
+            {"list_id": "list-001", "task_id": "task-001"},
+            ctx,
+        )
+        self.assertIs(
+            result.get("isError"),
+            True,
+            msg="propose_task_complete must reject a list_id not from a prior get_task_lists result.",
+        )
+        self.assertIn(
+            "get_task_lists",
+            str(result.get("content", "")),
+            msg="Error message must reference 'get_task_lists'.",
+        )
 
 
 # ---------------------------------------------------------------------------

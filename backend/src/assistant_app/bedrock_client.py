@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -10,20 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class BedrockConverseRouter:
-    """Routes user messages through the Bedrock Converse API for intent classification and plan generation.
+    """Routes user messages through the Bedrock Converse API for plan generation.
 
-    In mock mode (when boto3 is unavailable or bedrock_router_model_id == "mock-router") the
-    classifier falls back to the keyword-based :func:`~assistant_app.intent.classify_message`.
+    In mock mode (when boto3 is unavailable or bedrock_router_model_id == "mock-router")
+    Bedrock calls return None or raise RuntimeError as appropriate.
     """
-
-    _SYSTEM_PROMPT = (
-        "You are an AI assistant orchestration router. "
-        "Your job is to classify the user's request into one of the following intent domains: "
-        "calendar, meeting_prep, grocery, travel, tasks, general. "
-        "Reply with a single JSON object with keys: "
-        "\"domain\" (string), \"operation\" (\"read\" or \"write\"), \"requires_confirmation\" (bool). "
-        "Do not include any other text."
-    )
 
     def __init__(self, model_id: str, region: str = "us-east-1") -> None:
         self.model_id = model_id
@@ -38,37 +28,6 @@ class BedrockConverseRouter:
             except ImportError:
                 logger.warning("boto3 not available; Bedrock calls will be skipped.")
         return self._client
-
-    def classify(self, message: str) -> dict[str, Any] | None:
-        """Call Bedrock Converse to classify the user message.
-
-        Returns a dict with keys ``domain``, ``operation``, ``requires_confirmation``
-        or None if Bedrock is unavailable.
-        """
-        if self.model_id == "mock-router":
-            return None
-
-        client = self._get_client()
-        if client is None:
-            return None
-
-        try:
-            response = client.converse(
-                modelId=self.model_id,
-                system=[{"text": self._SYSTEM_PROMPT}],
-                messages=[{"role": "user", "content": [{"text": message}]}],
-                inferenceConfig={"maxTokens": 256, "temperature": 0.0},
-            )
-            output_text = (
-                response.get("output", {})
-                .get("message", {})
-                .get("content", [{}])[0]
-                .get("text", "")
-            )
-            return json.loads(output_text)
-        except Exception as exc:
-            logger.warning("Bedrock classify failed: %s", exc)
-            return None
 
     def agent_turn(
         self,
