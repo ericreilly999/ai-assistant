@@ -18,7 +18,17 @@ jobs:
         run: pip install pytest pytest-cov
       - name: Run backend unit tests
         run: |
-          PYTHONPATH=backend/src python -m pytest backend/tests -v --tb=short
+          PYTHONPATH=backend/src python -m pytest backend/tests -v --tb=short \
+            --cov=backend/src --cov-report=xml:backend/coverage.xml \
+            --cov-report=term-missing --cov-fail-under=80
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+          retention-days: 7
 
   backend-lint:
     runs-on: ubuntu-latest
@@ -88,12 +98,18 @@ jobs:
         run: pip install checkov
       - name: Run checkov on terraform
         run: |
-          checkov -d terraform/environments/${{ matrix.environment }} \
+          # CKV_AWS_272: Lambda Code Signing — skipped because no AWS Signer signing profile
+          # is configured yet; tracked as a pre-production security hardening follow-up.
+          # CKV_AWS_116: Lambda Dead Letter Queue — skipped because this Lambda is invoked
+          # synchronously via API Gateway; async DLQ configuration has no effect here.
+          # CKV_AWS_50: Lambda X-Ray tracing — skipped because X-Ray adds per-request cost
+          # and is deferred to post-MVP observability hardening; CloudWatch Logs cover interim tracing.
+          checkov \
+            -d terraform/environments/${{ matrix.environment }} \
             --framework terraform \
             --quiet \
             --compact \
-            --skip-check CKV_AWS_272,CKV_AWS_116,CKV_AWS_50 \
-            || true
+            --skip-check CKV_AWS_272,CKV_AWS_116,CKV_AWS_50
 
   lambda-package-build:
     runs-on: ubuntu-latest
