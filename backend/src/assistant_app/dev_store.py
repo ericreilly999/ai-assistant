@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,7 @@ class DevTokenStore:
         Format: ``{user_id}#{provider}``
 
         Using a composite value rather than a separate sort key keeps the table
-        schema (single string hash_key ``provider``) unchanged while ensuring
+        schema (single string hash_key ``pk``) unchanged while ensuring
         that one user's OAuth tokens can never overwrite another user's record.
         """
         return f"{user_id}#{provider}"
@@ -63,7 +64,7 @@ class DevTokenStore:
     def get_tokens(self, provider: str, user_id: str = "local") -> dict[str, Any] | None:
         if self._table is not None:
             key = self._ddb_key(user_id, provider)
-            response = self._table.get_item(Key={"provider": key})
+            response = self._table.get_item(Key={"pk": key})
             item = response.get("Item")
             if item is None:
                 return None
@@ -73,7 +74,31 @@ class DevTokenStore:
     def set_tokens(self, provider: str, tokens: dict[str, Any], user_id: str = "local") -> None:
         if self._table is not None:
             key = self._ddb_key(user_id, provider)
-            self._table.put_item(Item={"provider": key, "tokens": json.dumps(tokens)})
+            item: dict[str, Any] = {"pk": key, "tokens": json.dumps(tokens)}
+
+            # Write expires_at as a top-level Number attribute so that DynamoDB TTL
+            # can automatically expire stale token records.  DynamoDB TTL requires a
+            # top-level attribute containing a Unix epoch integer — it cannot read the
+            # ISO-8601 string stored inside the JSON blob.
+            expiry_epoch: int | None = None
+            if "expires_at" in tokens:
+                # expires_at may already be a Unix timestamp (int/float) or an ISO-8601 string.
+                raw = tokens["expires_at"]
+                if isinstance(raw, (int, float)):
+                    expiry_epoch = int(raw)
+                # String form is left without conversion here; callers that store
+                # an ISO-8601 string should also supply expires_in.
+            if expiry_epoch is None and "expires_in" in tokens:
+                # expires_in is seconds from now; resolve to absolute epoch.
+                try:
+                    expiry_epoch = int(time.time()) + int(tokens["expires_in"])
+                except (TypeError, ValueError):
+                    pass
+
+            if expiry_epoch is not None:
+                item["expires_at"] = expiry_epoch
+
+            self._table.put_item(Item=item)
             return
         data = self.load()
         data[provider] = tokens
@@ -82,7 +107,7 @@ class DevTokenStore:
     def clear_tokens(self, provider: str, user_id: str = "local") -> None:
         if self._table is not None:
             key = self._ddb_key(user_id, provider)
-            self._table.delete_item(Key={"provider": key})
+            self._table.delete_item(Key={"pk": key})
             return
         data = self.load()
         data.pop(provider, None)

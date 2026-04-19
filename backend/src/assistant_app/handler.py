@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -11,6 +12,8 @@ from assistant_app.live_service import LocalIntegrationService
 from assistant_app.orchestrator import AssistantOrchestrator
 from assistant_app.registry import ProviderRegistry
 from assistant_app.response import html_response, json_response, redirect_response
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_user_id(event: dict[str, Any]) -> str:
@@ -30,8 +33,16 @@ def _extract_user_id(event: dict[str, Any]) -> str:
             .get("claims", {})
             .get("sub")
         )
-        return sub or "local"
+        if sub:
+            return sub
+        logger.warning(
+            "user_id not found in JWT claims, falling back to local — check API Gateway authorizer config"
+        )
+        return "local"
     except (AttributeError, TypeError):
+        logger.warning(
+            "user_id not found in JWT claims, falling back to local — check API Gateway authorizer config"
+        )
         return "local"
 
 
@@ -42,11 +53,6 @@ def build_handler(
 ):
     active_config = config or AppConfig.from_env()
     active_registry = registry or ProviderRegistry(mock_mode=active_config.mock_provider_mode)
-    orchestrator = AssistantOrchestrator(
-        active_config,
-        active_registry,
-        live_service or LocalIntegrationService(active_config, active_registry),
-    )
 
     def _handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         method = _resolve_method(event)
@@ -61,6 +67,11 @@ def build_handler(
         else:
             user_id = _extract_user_id(event)
             dev_service = LocalIntegrationService(active_config, active_registry, user_id=user_id)
+
+        # Build the orchestrator per-request so it always uses the user-scoped
+        # live_service.  Building it once at module load would default to
+        # user_id="local" for every request regardless of the authenticated user.
+        orchestrator = AssistantOrchestrator(active_config, active_registry, dev_service)
 
         if method == "OPTIONS":
             return json_response(200, {"ok": True})

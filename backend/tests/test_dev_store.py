@@ -117,12 +117,12 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
     def test_get_tokens_returns_none_when_item_missing(self) -> None:
         self._table.get_item.return_value = {}
         self.assertIsNone(self._store.get_tokens("google", user_id="user-abc"))
-        # Partition key must be the composite {user_id}#{provider} value
-        self._table.get_item.assert_called_once_with(Key={"provider": "user-abc#google"})
+        # Partition key attribute name must be "pk", value is composite {user_id}#{provider}
+        self._table.get_item.assert_called_once_with(Key={"pk": "user-abc#google"})
 
     def test_get_tokens_returns_dict_when_item_exists(self) -> None:
         tokens = {"access_token": "ddb-tok", "expires_in": 3600}
-        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(tokens)}}
+        self._table.get_item.return_value = {"Item": {"pk": "user-abc#google", "tokens": json.dumps(tokens)}}
         result = self._store.get_tokens("google", user_id="user-abc")
         self.assertEqual(result, tokens)
 
@@ -130,7 +130,7 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
         """When user_id is omitted the key falls back to 'local#<provider>'."""
         self._table.get_item.return_value = {}
         self._store.get_tokens("google")
-        self._table.get_item.assert_called_once_with(Key={"provider": "local#google"})
+        self._table.get_item.assert_called_once_with(Key={"pk": "local#google"})
 
     # ------------------------------------------------------------------ set_tokens
 
@@ -138,31 +138,31 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
         tokens = {"access_token": "new-tok"}
         self._store.set_tokens("microsoft", tokens, user_id="user-abc")
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "user-abc#microsoft", "tokens": json.dumps(tokens)}
+            Item={"pk": "user-abc#microsoft", "tokens": json.dumps(tokens)}
         )
 
     # ------------------------------------------------------------------ clear_tokens
 
     def test_clear_tokens_calls_delete_item(self) -> None:
         self._store.clear_tokens("google", user_id="user-abc")
-        self._table.delete_item.assert_called_once_with(Key={"provider": "user-abc#google"})
+        self._table.delete_item.assert_called_once_with(Key={"pk": "user-abc#google"})
 
     # ------------------------------------------------------------------ merge_tokens
 
     def test_merge_tokens_merges_into_existing_tokens(self) -> None:
         existing = {"access_token": "old-tok", "scope": "email"}
-        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(existing)}}
+        self._table.get_item.return_value = {"Item": {"pk": "user-abc#google", "tokens": json.dumps(existing)}}
         self._store.merge_tokens("google", {"access_token": "new-tok"}, user_id="user-abc")
         expected = {"access_token": "new-tok", "scope": "email"}
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "user-abc#google", "tokens": json.dumps(expected)}
+            Item={"pk": "user-abc#google", "tokens": json.dumps(expected)}
         )
 
     def test_merge_tokens_creates_provider_if_absent(self) -> None:
         self._table.get_item.return_value = {}
         self._store.merge_tokens("microsoft", {"access_token": "ms-tok"}, user_id="user-abc")
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "user-abc#microsoft", "tokens": json.dumps({"access_token": "ms-tok"})}
+            Item={"pk": "user-abc#microsoft", "tokens": json.dumps({"access_token": "ms-tok"})}
         )
 
     # ------------------------------------------------------------------ plaid_status
@@ -175,7 +175,7 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
 
     def test_plaid_status_with_token(self) -> None:
         plaid_tokens = {"access_token": "plaid-tok", "institution_id": "ins_123"}
-        self._table.get_item.return_value = {"Item": {"provider": "user-abc#plaid", "tokens": json.dumps(plaid_tokens)}}
+        self._table.get_item.return_value = {"Item": {"pk": "user-abc#plaid", "tokens": json.dumps(plaid_tokens)}}
         status = self._store.plaid_status(user_id="user-abc")
         self.assertTrue(status["has_access_token"])
         self.assertEqual(status["institution_id"], "ins_123")
@@ -188,8 +188,78 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
 
     def test_expires_at_returns_value_when_set(self) -> None:
         tokens = {"access_token": "tok", "expires_at": "2026-01-01T00:00:00+00:00"}
-        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(tokens)}}
+        self._table.get_item.return_value = {"Item": {"pk": "user-abc#google", "tokens": json.dumps(tokens)}}
         self.assertEqual(self._store.expires_at("google", user_id="user-abc"), "2026-01-01T00:00:00+00:00")
+
+    # ------------------------------------------------------------------ multi-user isolation
+
+    def test_multi_user_isolation(self) -> None:
+        """User A's get_tokens must NOT return user B's token record.
+
+        The DynamoDB key for user-A#google and user-B#google are different pk values,
+        so a lookup for user-A can never return the record written for user-B.
+        This test proves that the two key values are distinct strings.
+        """
+        tokens_a = {"access_token": "tok-user-a"}
+        tokens_b = {"access_token": "tok-user-b"}
+
+        # Simulate DynamoDB returning user B's record for user B's key
+        def side_effect(Key):  # noqa: N803
+            if Key == {"pk": "user-B#google"}:
+                return {"Item": {"pk": "user-B#google", "tokens": json.dumps(tokens_b)}}
+            # Any other key (e.g. user-A#google) returns empty — no record
+            return {}
+
+        self._table.get_item.side_effect = side_effect
+
+        result_a = self._store.get_tokens("google", user_id="user-A")
+        result_b = self._store.get_tokens("google", user_id="user-B")
+
+        # user-A's lookup returns None (no matching record)
+        self.assertIsNone(result_a)
+        # user-B's lookup returns only user-B's tokens
+        self.assertEqual(result_b, tokens_b)
+        # The two DynamoDB keys must be distinct strings
+        key_a = self._store._ddb_key("user-A", "google")
+        key_b = self._store._ddb_key("user-B", "google")
+        self.assertNotEqual(key_a, key_b)
+
+    # ------------------------------------------------------------------ TTL attribute
+
+    def test_set_tokens_writes_expires_at_number_when_expires_in_present(self) -> None:
+        """expires_in triggers a top-level integer expires_at for DynamoDB TTL."""
+        import time as _time
+        tokens = {"access_token": "tok", "expires_in": 3600}
+        before = int(_time.time())
+        self._store.set_tokens("google", tokens, user_id="user-abc")
+        after = int(_time.time())
+
+        call_args = self._table.put_item.call_args
+        item = call_args[1]["Item"] if call_args[1] else call_args[0][0]["Item"]
+        self.assertIn("expires_at", item)
+        self.assertIsInstance(item["expires_at"], int)
+        # expires_at must be approximately now + 3600 s
+        self.assertGreaterEqual(item["expires_at"], before + 3600)
+        self.assertLessEqual(item["expires_at"], after + 3600)
+
+    def test_set_tokens_writes_expires_at_number_when_expires_at_is_int(self) -> None:
+        """When expires_at is already an integer epoch, it is passed through as-is."""
+        epoch = 1800000000
+        tokens = {"access_token": "tok", "expires_at": epoch}
+        self._store.set_tokens("google", tokens, user_id="user-abc")
+
+        call_args = self._table.put_item.call_args
+        item = call_args[1]["Item"] if call_args[1] else call_args[0][0]["Item"]
+        self.assertEqual(item["expires_at"], epoch)
+
+    def test_set_tokens_omits_expires_at_when_no_expiry(self) -> None:
+        """When neither expires_in nor numeric expires_at is present, no TTL attribute."""
+        tokens = {"access_token": "tok"}
+        self._store.set_tokens("google", tokens, user_id="user-abc")
+
+        call_args = self._table.put_item.call_args
+        item = call_args[1]["Item"] if call_args[1] else call_args[0][0]["Item"]
+        self.assertNotIn("expires_at", item)
 
     # ------------------------------------------------------------------ dispatch check
 
