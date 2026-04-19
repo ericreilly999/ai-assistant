@@ -70,6 +70,8 @@ class GoogleOAuthTests(unittest.TestCase):
             service.complete_google_auth("code-123", "state-abc")
 
     def test_complete_google_auth_stores_tokens(self) -> None:
+        # Seed state into the file-backed store so the CSRF check passes
+        self.service._store.merge_tokens("google_oauth_state", {"state": "state-abc"})
         mock_tokens = {
             "access_token": "g-access",
             "refresh_token": "g-refresh",
@@ -125,6 +127,8 @@ class MicrosoftOAuthTests(unittest.TestCase):
         self.assertIn("response_type=code", url)
 
     def test_complete_microsoft_auth_stores_tokens(self) -> None:
+        # Seed the state so the CSRF check passes
+        self.service._store.merge_tokens("microsoft_oauth_state", {"state": "state-abc"})
         mock_tokens = {
             "access_token": "ms-access",
             "refresh_token": "ms-refresh",

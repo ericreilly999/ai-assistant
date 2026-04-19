@@ -12,7 +12,7 @@ from unittest.mock import patch
 from assistant_app.bedrock_client import MockBedrockAgent
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
-from assistant_app.handler import _extract_user_id, build_handler
+from assistant_app.handler import _extract_user_id, _redact_body, build_handler
 from assistant_app.registry import ProviderRegistry
 
 
@@ -541,6 +541,56 @@ class HandlerTests(unittest.TestCase):
                 None,
             )
             self.assertEqual(response["statusCode"], 502)
+
+
+class RedactBodyTests(unittest.TestCase):
+    """Tests for _redact_body — verifies sensitive fields are scrubbed before logging."""
+
+    def test_redacts_access_token(self) -> None:
+        body = '{"access_token": "ya29.abcdef1234567890", "token_type": "Bearer"}'
+        result = _redact_body(body)
+        self.assertIn('"access_token": "[REDACTED]"', result)
+        self.assertNotIn("ya29.abcdef1234567890", result)
+
+    def test_redacts_refresh_token(self) -> None:
+        body = '{"refresh_token": "AQD0abc-XYZ_refresh", "expires_in": 3600}'
+        result = _redact_body(body)
+        self.assertIn('"refresh_token": "[REDACTED]"', result)
+        self.assertNotIn("AQD0abc-XYZ_refresh", result)
+
+    def test_redacts_plaid_secret(self) -> None:
+        body = '{"plaid_secret": "super-secret-plaid-value", "client_id": "abc123"}'
+        result = _redact_body(body)
+        self.assertIn('"plaid_secret": "[REDACTED]"', result)
+        self.assertNotIn("super-secret-plaid-value", result)
+
+    def test_preserves_non_sensitive_fields(self) -> None:
+        body = '{"token_type": "Bearer", "expires_in": 3600, "scope": "openid email"}'
+        result = _redact_body(body)
+        self.assertIn('"token_type": "Bearer"', result)
+        self.assertIn('"scope": "openid email"', result)
+
+    def test_returns_empty_string_unchanged(self) -> None:
+        self.assertEqual(_redact_body(""), "")
+
+    def test_returns_empty_string_for_none(self) -> None:
+        # _redact_body has a str -> str signature; None must return "" not None
+        self.assertEqual(_redact_body(None), "")
+
+    def test_redacts_base64url_id_token(self) -> None:
+        # JWT id_token values contain +, =, / which the old [\w\-\._~]+ regex missed
+        token = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc+def/ghi==end"
+        body = f'{{"id_token": "{token}", "token_type": "Bearer"}}'
+        result = _redact_body(body)
+        self.assertIn('"id_token": "[REDACTED]"', result)
+        self.assertNotIn(token, result)
+
+    def test_redacts_multiple_sensitive_fields_in_one_body(self) -> None:
+        body = '{"access_token": "tok123", "refresh_token": "ref456", "scope": "openid"}'
+        result = _redact_body(body)
+        self.assertNotIn("tok123", result)
+        self.assertNotIn("ref456", result)
+        self.assertIn('"scope": "openid"', result)
 
 
 class ExtractUserIdTests(unittest.TestCase):

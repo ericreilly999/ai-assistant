@@ -150,6 +150,9 @@ class TestCompleteGoogleAuth(unittest.TestCase):
     def test_success_stores_tokens_and_returns_dict(self) -> None:
         svc = _make_service()
         fake_tokens = {"access_token": "goog-access", "refresh_token": "goog-refresh", "scope": "openid"}
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "state-abc"} if key == "google_oauth_state" else None
+        )
 
         with patch("assistant_app.live_service.http_post_form", return_value=fake_tokens):
             result = svc.complete_google_auth("auth-code-xyz", "state-abc")
@@ -164,6 +167,34 @@ class TestCompleteGoogleAuth(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             svc.complete_google_auth("code", "state")
         self.assertIn("Google OAuth", str(ctx.exception))
+
+    def test_raises_on_state_mismatch(self) -> None:
+        svc = _make_service()
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "correct-state"} if key == "google_oauth_state" else None
+        )
+        with self.assertRaises(ValueError) as ctx:
+            svc.complete_google_auth("auth-code", "wrong-state")
+        self.assertIn("CSRF", str(ctx.exception))
+
+    def test_raises_when_no_stored_state(self) -> None:
+        svc = _make_service()
+        svc._store.get_tokens.return_value = None
+        with self.assertRaises(ValueError) as ctx:
+            svc.complete_google_auth("auth-code", "state-abc")
+        self.assertIn("CSRF", str(ctx.exception))
+
+    def test_clears_stored_state_after_successful_match(self) -> None:
+        svc = _make_service()
+        fake_tokens = {"access_token": "goog-access", "scope": "openid"}
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "state-xyz"} if key == "google_oauth_state" else None
+        )
+
+        with patch("assistant_app.live_service.http_post_form", return_value=fake_tokens):
+            svc.complete_google_auth("auth-code", "state-xyz")
+
+        svc._store.clear_tokens.assert_called_once_with("google_oauth_state", user_id=svc._user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +228,9 @@ class TestCompleteMicrosoftAuth(unittest.TestCase):
     def test_success_stores_tokens_and_returns_dict(self) -> None:
         svc = _make_service()
         fake_tokens = {"access_token": "ms-access", "refresh_token": "ms-refresh", "scope": "Calendars.ReadWrite"}
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "state-ms"} if key == "microsoft_oauth_state" else None
+        )
 
         with patch("assistant_app.live_service.http_post_form", return_value=fake_tokens):
             result = svc.complete_microsoft_auth("auth-code-ms", "state-ms")
@@ -210,6 +244,34 @@ class TestCompleteMicrosoftAuth(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             svc.complete_microsoft_auth("code", "state")
         self.assertIn("Microsoft OAuth", str(ctx.exception))
+
+    def test_raises_on_state_mismatch(self) -> None:
+        svc = _make_service()
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "correct-ms-state"} if key == "microsoft_oauth_state" else None
+        )
+        with self.assertRaises(ValueError) as ctx:
+            svc.complete_microsoft_auth("auth-code", "wrong-ms-state")
+        self.assertIn("CSRF", str(ctx.exception))
+
+    def test_raises_when_no_stored_state(self) -> None:
+        svc = _make_service()
+        svc._store.get_tokens.return_value = None
+        with self.assertRaises(ValueError) as ctx:
+            svc.complete_microsoft_auth("auth-code", "state-ms")
+        self.assertIn("CSRF", str(ctx.exception))
+
+    def test_clears_stored_state_after_successful_match(self) -> None:
+        svc = _make_service()
+        fake_tokens = {"access_token": "ms-access", "scope": "Calendars.ReadWrite"}
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
+            {"state": "state-ms-xyz"} if key == "microsoft_oauth_state" else None
+        )
+
+        with patch("assistant_app.live_service.http_post_form", return_value=fake_tokens):
+            svc.complete_microsoft_auth("auth-code-ms", "state-ms-xyz")
+
+        svc._store.clear_tokens.assert_called_once_with("microsoft_oauth_state", user_id=svc._user_id)
 
 
 # ---------------------------------------------------------------------------
