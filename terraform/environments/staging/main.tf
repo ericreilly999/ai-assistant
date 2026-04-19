@@ -26,11 +26,12 @@ module "kms" {
 }
 
 module "auth" {
-  source        = "../../modules/cognito_user_pool"
-  name_prefix   = local.name_prefix
-  callback_urls = var.callback_urls
-  logout_urls   = var.logout_urls
-  tags          = local.tags
+  source         = "../../modules/cognito_user_pool"
+  name_prefix    = local.name_prefix
+  callback_urls  = var.callback_urls
+  logout_urls    = var.logout_urls
+  cognito_domain = var.cognito_domain
+  tags           = local.tags
 }
 
 module "secrets" {
@@ -77,6 +78,16 @@ data "aws_iam_policy_document" "lambda_runtime" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = values(module.secrets.secret_arns)
   }
+
+  statement {
+    sid = "OAuthTokenStore"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = [aws_dynamodb_table.oauth_tokens.arn]
+  }
 }
 
 module "lambda" {
@@ -104,6 +115,9 @@ module "lambda" {
     MICROSOFT_OAUTH_SECRET_ARN = module.secrets.secret_arns["microsoft-oauth"]
     PLAID_SECRET_ARN           = module.secrets.secret_arns["plaid"]
     CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
+    GOOGLE_REDIRECT_URI        = "https://${module.api.api_id}.execute-api.${var.aws_region}.amazonaws.com/staging/oauth/google/callback"
+    MICROSOFT_REDIRECT_URI     = "https://${module.api.api_id}.execute-api.${var.aws_region}.amazonaws.com/staging/oauth/microsoft/callback"
+    OAUTH_TOKEN_TABLE          = aws_dynamodb_table.oauth_tokens.name
   }
   tags = local.tags
 }
@@ -122,7 +136,11 @@ module "api" {
     "GET /health",
     "GET /v1/integrations",
     "POST /v1/chat/plan",
-    "POST /v1/chat/execute"
+    "POST /v1/chat/execute",
+    "GET /oauth/google/start",
+    "GET /oauth/google/callback",
+    "GET /oauth/microsoft/start",
+    "GET /oauth/microsoft/callback"
   ]
   protected_routes = [
     "GET /v1/integrations",

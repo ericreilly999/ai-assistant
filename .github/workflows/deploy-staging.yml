@@ -1,0 +1,273 @@
+name: Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for this staging deployment (optional)'
+        required: false
+        default: ''
+
+# Prevent concurrent deploys to staging. A queued run waits for the in-progress
+# run to finish rather than being cancelled so no deploy is silently dropped.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  # ── CI gate ────────────────────────────────────────────────────────────────
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run backend unit tests
+        run: |
+          pip install -e "backend[test]"
+          PYTHONPATH=backend/src python -m pytest backend/tests/ --cov=backend/src --cov-report=xml:backend/coverage.xml --cov-fail-under=80
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run backend lint
+        run: |
+          pip install -e "backend[test]"
+          PYTHONPATH=backend/src python -m ruff check backend/
+
+  backend-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run backend typecheck
+        run: |
+          pip install -e "backend[test]"
+          PYTHONPATH=backend/src python -m mypy backend/src
+
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install mobile dependencies
+        run: npm ci
+      - name: Typecheck mobile app
+        run: npm run typecheck
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform
+      - name: Initialize (no backend)
+        run: terraform -chdir=terraform/environments/staging init -backend=false
+      - name: Validate
+        run: terraform -chdir=terraform/environments/staging validate
+
+  # ── Deploy ─────────────────────────────────────────────────────────────────
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, backend-lint, backend-typecheck, mobile-typecheck, terraform-validate]
+    environment: staging
+    permissions:
+      id-token: write   # required for OIDC
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Configure AWS credentials via OIDC (no long-lived keys).
+      # Prerequisites:
+      #   1. Create an IAM OIDC provider for token.actions.githubusercontent.com
+      #   2. Create an IAM role trusted by the OIDC provider with the repo condition:
+      #        repo:<org>/<repo>:environment:staging
+      #   3. Attach a policy granting Lambda, API Gateway, Cognito, Secrets Manager,
+      #      CloudWatch, DynamoDB, IAM (scoped), and S3 (tfstate bucket) permissions.
+      #   4. Set the GitHub secret AWS_DEPLOY_ROLE_ARN on the "staging" environment.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      # Build the Lambda deployment package the same way package-lambda.ps1 does.
+      - name: Build Lambda package
+        run: |
+          mkdir -p terraform/environments/staging/build
+          cd backend/src
+          zip -r ../../terraform/environments/staging/build/orchestrator.zip .
+
+      # Write a tfvars file from GitHub secrets / variables.
+      # Add the corresponding secrets/vars to the GitHub "staging" environment:
+      #   Required secrets:
+      #     TF_BACKEND_BUCKET  — S3 bucket name for Terraform state
+      #   Optional vars (fall back to safe defaults):
+      #     AWS_REGION, MOCK_PROVIDER_MODE, TF_CORS_ORIGINS,
+      #     TF_CALLBACK_URLS, TF_LOGOUT_URLS, TF_BEDROCK_MODEL_ID,
+      #     TF_COGNITO_DOMAIN
+      - name: Write terraform.tfvars
+        run: |
+          cat > terraform/environments/staging/terraform.tfvars <<EOF
+          environment             = "staging"
+          aws_region              = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          mock_provider_mode      = ${{ vars.MOCK_PROVIDER_MODE || 'false' }}
+          cors_allow_origins      = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
+          bedrock_router_model_id = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
+          callback_urls           = [${{ vars.TF_CALLBACK_URLS || '' }}]
+          logout_urls             = [${{ vars.TF_LOGOUT_URLS || '' }}]
+          cognito_domain          = "${{ vars.TF_COGNITO_DOMAIN || 'ai-assistant-staging' }}"
+          EOF
+
+      - name: Write backend config
+        run: |
+          cat > terraform/environments/staging/backend.hcl <<EOF
+          bucket  = "${{ secrets.TF_BACKEND_BUCKET }}"
+          key     = "ai-assistant/staging/terraform.tfstate"
+          region  = "${{ vars.AWS_REGION || 'us-east-1' }}"
+          encrypt = true
+          EOF
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/environments/staging init -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform -chdir=terraform/environments/staging plan -var-file=terraform.tfvars -out=tfplan
+
+      - name: Terraform apply
+        run: terraform -chdir=terraform/environments/staging apply -auto-approve tfplan
+
+      # ── Post-deploy Lambda code integrity check ─────────────────────────────
+      # Computes the base64-encoded SHA256 of the local zip built by archive_file
+      # and asserts it matches the CodeSha256 AWS reports for the deployed function.
+      # A mismatch means Terraform reported "no changes" but the code diverged —
+      # exactly the silent failure mode that caused the 2026-04-08 stale deploy.
+      - name: Verify deployed Lambda SHA matches local build
+        run: |
+          FUNCTION_NAME=$(terraform -chdir=terraform/environments/staging output -raw lambda_function_name)
+          ZIP_PATH="terraform/environments/staging/build/orchestrator.zip"
+
+          # AWS CodeSha256 is base64(sha256(zip bytes))
+          DEPLOYED_SHA=$(aws lambda get-function \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ vars.AWS_REGION || 'us-east-1' }}" \
+            --query "Configuration.CodeSha256" \
+            --output text)
+
+          LOCAL_SHA=$(openssl dgst -sha256 -binary "$ZIP_PATH" | base64)
+
+          echo "Deployed SHA : $DEPLOYED_SHA"
+          echo "Local ZIP SHA: $LOCAL_SHA"
+
+          if [ "$DEPLOYED_SHA" != "$LOCAL_SHA" ]; then
+            echo "ERROR: SHA mismatch — the deployed Lambda code does not match the locally built zip."
+            echo "This indicates Terraform applied without updating the function code."
+            echo "Investigate source_code_hash computation and ensure archive_file output matches the deployed artefact."
+            exit 1
+          fi
+
+          echo "SHA verification passed — deployed code matches local build."
+
+      # ── Derive mobile API URL from Terraform outputs ────────────────────────
+      - name: Write EXPO_PUBLIC_API_BASE_URL to mobile/.env
+        run: |
+          BASE=$(terraform -chdir=terraform/environments/staging output -raw api_endpoint)
+          STAGE=$(terraform -chdir=terraform/environments/staging output -raw stage_name 2>/dev/null || echo "staging")
+          NEW_URL="$BASE/$STAGE"
+          if grep -q "^EXPO_PUBLIC_API_BASE_URL=" mobile/.env; then
+            sed -i "s|^EXPO_PUBLIC_API_BASE_URL=.*|EXPO_PUBLIC_API_BASE_URL=$NEW_URL|" mobile/.env
+          else
+            echo "EXPO_PUBLIC_API_BASE_URL=$NEW_URL" >> mobile/.env
+          fi
+          echo "Set EXPO_PUBLIC_API_BASE_URL=$NEW_URL"
+
+      # ── Post-deploy smoke tests ─────────────────────────────────────────────
+      # Capture the API endpoint from Terraform output and verify endpoints respond.
+      # Retries up to 5 times (30 s apart) on /health to allow Lambda cold start.
+      - name: Get API endpoint
+        id: api
+        run: |
+          BASE=$(terraform -chdir=terraform/environments/staging output -raw api_endpoint)
+          STAGE=$(terraform -chdir=terraform/environments/staging output -raw stage_name 2>/dev/null || echo "staging")
+          echo "endpoint=$BASE/$STAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test — GET /health
+        run: |
+          API="${{ steps.api.outputs.endpoint }}"
+          echo "Testing $API/health"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API/health")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Health check failed after 5 attempts."
+          exit 1
+
+      - name: Smoke test — GET /v1/integrations
+        run: |
+          API="${{ steps.api.outputs.endpoint }}"
+          echo "Testing $API/v1/integrations"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API/v1/integrations")
+          echo "HTTP $STATUS"
+          # /v1/integrations is a protected route — 401 is acceptable in staging
+          # until a CI service-account Cognito token is provisioned (see TODO T-27).
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
+            echo "Integrations endpoint responded as expected (HTTP $STATUS)."
+          else
+            echo "Integrations endpoint returned unexpected status $STATUS."
+            exit 1
+          fi
+
+      # TODO(T-27): POST /v1/chat/plan requires a Cognito JWT. Non-blocking until
+      # a CI service-account token is provisioned.
+      - name: Smoke test — POST /v1/chat/plan (non-blocking, auth required)
+        run: |
+          API="${{ steps.api.outputs.endpoint }}"
+          echo "Testing $API/v1/chat/plan"
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "$API/v1/chat/plan" \
+            -H "Content-Type: application/json" \
+            -d '{"message":"hello","providers":[]}')
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $STATUS"
+          echo "Body: $BODY"
+          if [ "$STATUS" = "200" ]; then
+            if echo "$BODY" | grep -q '"intent"'; then
+              echo "POST /v1/chat/plan passed — response contains 'intent'."
+            else
+              echo "WARNING: HTTP 200 but response body does not contain 'intent'. Possible PlanResponse shape regression."
+              echo "Response was: $BODY"
+            fi
+          elif [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
+            echo "WARNING: POST /v1/chat/plan returned $STATUS — JWT auth is enforced by API GW (expected until CI token is provisioned)."
+          else
+            echo "WARNING: POST /v1/chat/plan returned unexpected status $STATUS."
+            echo "Response was: $BODY"
+          fi
