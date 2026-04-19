@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -90,10 +91,8 @@ class DevTokenStore:
                 # an ISO-8601 string should also supply expires_in.
             if expiry_epoch is None and "expires_in" in tokens:
                 # expires_in is seconds from now; resolve to absolute epoch.
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     expiry_epoch = int(time.time()) + int(tokens["expires_in"])
-                except (TypeError, ValueError):
-                    pass
 
             if expiry_epoch is not None:
                 item["expires_at"] = expiry_epoch

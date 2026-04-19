@@ -8,7 +8,7 @@ resource "aws_secretsmanager_secret" "this" {
 
   name                           = "${var.name_prefix}/${each.value}"
   kms_key_id                     = var.kms_key_arn
-  recovery_window_in_days        = 0
+  recovery_window_in_days        = var.recovery_window_in_days
   force_overwrite_replica_secret = true
   tags                           = var.tags
 }

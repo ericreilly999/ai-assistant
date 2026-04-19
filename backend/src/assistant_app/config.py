@@ -40,6 +40,24 @@ def _default_store_file() -> str:
     return "backend/.local/dev_tokens.json"
 
 
+def _validate_live_credentials() -> None:
+    """Raise RuntimeError if any required provider credential is missing in live Lambda mode."""
+    required = {
+        "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID"),
+        "GOOGLE_CLIENT_SECRET": os.getenv("GOOGLE_CLIENT_SECRET"),
+        "MICROSOFT_CLIENT_ID": os.getenv("MICROSOFT_CLIENT_ID"),
+        "MICROSOFT_CLIENT_SECRET": os.getenv("MICROSOFT_CLIENT_SECRET"),
+        "PLAID_CLIENT_ID": os.getenv("PLAID_CLIENT_ID"),
+        "PLAID_SECRET": os.getenv("PLAID_SECRET"),
+    }
+    missing = [k for k, v in required.items() if not (v and v.strip())]
+    if missing:
+        raise RuntimeError(
+            f"Lambda started in live mode but required credentials are missing: {missing}. "
+            "Check Secrets Manager ARN env vars and IAM permissions."
+        )
+
+
 def _compute_provider_secret_status() -> dict[str, bool]:
     return {
         "google": bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET")),
@@ -85,6 +103,11 @@ class AppConfig:
         # Load secrets from AWS Secrets Manager at cold start (if in Lambda)
         from assistant_app.secrets_manager import load_secrets_from_manager
         load_secrets_from_manager()
+
+        # Validate after Secrets Manager load but before local .env.local fallback —
+        # in Lambda there is no .env.local, so this is the only chance to catch missing creds.
+        if os.getenv("AWS_LAMBDA_FUNCTION_NAME") and not _bool_env("MOCK_PROVIDER_MODE", True):
+            _validate_live_credentials()
 
         local_env_file = os.getenv("LOCAL_ENV_FILE", "backend/.env.local")
         if os.path.exists(local_env_file):
