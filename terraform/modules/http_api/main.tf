@@ -52,6 +52,8 @@ resource "aws_apigatewayv2_route" "this" {
 # code is deployed. If a handler ships before the named route exists, that path is temporarily
 # reachable unauthenticated via this catch-all. Always deploy Terraform first, then Lambda.
 resource "aws_apigatewayv2_route" "default_catchall" {
+  # checkov:skip=CKV_AWS_309:Catch-all route is intentionally unauthenticated — returns structured
+  # JSON 404 for unmatched paths; JWT auth applies to all named protected routes.
   api_id             = aws_apigatewayv2_api.this.id
   route_key          = "$default"
   target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
@@ -59,10 +61,32 @@ resource "aws_apigatewayv2_route" "default_catchall" {
   authorizer_id      = null
 }
 
+# CKV_AWS_76: access logging log group — always created so the stage can enable access logging.
+resource "aws_cloudwatch_log_group" "access_logs" {
+  name              = "/aws/apigateway/${var.name}/access-logs"
+  retention_in_days = 365
+  tags              = var.tags
+}
+
 resource "aws_apigatewayv2_stage" "this" {
   api_id      = aws_apigatewayv2_api.this.id
   name        = var.stage_name
   auto_deploy = true
+
+  # CKV_AWS_76: enable access logging to a dedicated CloudWatch log group.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.access_logs.arn
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      sourceIp       = "$context.identity.sourceIp"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      routeKey       = "$context.routeKey"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+    })
+  }
 
   default_route_settings {
     throttling_burst_limit = 20

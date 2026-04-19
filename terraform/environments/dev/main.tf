@@ -8,6 +8,9 @@ locals {
   })
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 data "archive_file" "orchestrator" {
   type        = "zip"
   source_dir  = "${path.root}/../../../backend/src"
@@ -46,20 +49,44 @@ module "bedrock" {
 }
 
 data "aws_iam_policy_document" "lambda_runtime" {
+  # CKV_AWS_356: scope Bedrock actions to foundation-model and guardrail ARNs in this
+  # account/region rather than using a bare "*". Cross-region inference profile ARNs
+  # (us.*) are included because Nova Pro routes through the us. prefix.
   statement {
-    sid = "BedrockRuntime"
+    sid = "BedrockInvokeModel"
     actions = [
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
-      "bedrock:ApplyGuardrail",
     ]
-    resources = ["*"]
+    resources = [
+      "arn:aws:bedrock:${data.aws_region.current.name}::foundation-model/*",
+      "arn:aws:bedrock:us-east-1::foundation-model/*",
+      "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+    ]
+  }
+
+  statement {
+    sid     = "BedrockApplyGuardrail"
+    actions = ["bedrock:ApplyGuardrail"]
+    resources = [
+      "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:guardrail/*",
+    ]
   }
 
   statement {
     sid       = "SecretsRead"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = values(module.secrets.secret_arns)
+  }
+
+  statement {
+    sid = "OAuthTokenStore"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = [aws_dynamodb_table.oauth_tokens.arn]
   }
 }
 
@@ -72,6 +99,7 @@ module "lambda" {
   source_code_hash       = data.archive_file.orchestrator.output_base64sha256
   timeout                = 30
   memory_size            = 512
+  kms_key_arn            = module.kms.key_arn
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
   has_additional_policy  = true
   environment_variables = {
@@ -89,6 +117,7 @@ module "lambda" {
     CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
     GOOGLE_REDIRECT_URI        = "https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/google/callback"
     MICROSOFT_REDIRECT_URI     = "https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/microsoft/callback"
+    OAUTH_TOKEN_TABLE          = aws_dynamodb_table.oauth_tokens.name
   }
   tags = local.tags
 }
