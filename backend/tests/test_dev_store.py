@@ -99,10 +99,9 @@ class DevTokenStoreTests(unittest.TestCase):
 
 def _make_dynamodb_store(mock_table: MagicMock) -> DevTokenStore:
     """Construct a DevTokenStore wired to a mock DynamoDB Table."""
-    with patch.dict(os.environ, {"OAUTH_TOKEN_TABLE": "ai-assistant-dev-tokens"}):
-        with patch("boto3.resource") as mock_resource:
-            mock_resource.return_value.Table.return_value = mock_table
-            store = DevTokenStore("/tmp/unused.json")
+    with patch.dict(os.environ, {"OAUTH_TOKEN_TABLE": "ai-assistant-dev-tokens"}), patch("boto3.resource") as mock_resource:
+        mock_resource.return_value.Table.return_value = mock_table
+        store = DevTokenStore("/tmp/unused.json")
     return store
 
 
