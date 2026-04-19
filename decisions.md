@@ -5,6 +5,15 @@
 
 ---
 
+## D-11 — DynamoDB Accepted for OAuth Token Storage (Revisit Before Multi-Tenant Scale)
+**Date**: 2026-04-19
+**Decision**: DynamoDB is approved as the OAuth token store for dev, staging, and prod MVP environments. Partition key is composite `{user_id}#{provider}` to enforce per-user token isolation. KMS CMK encryption and TTL are required on the table. This deviates from the original spec §4.3 (no DynamoDB) and §4.4 (no server-side token storage), which were written before the stateless Lambda + multi-provider OAuth persistence requirement was fully understood.
+**Rationale**: DynamoDB with per-user partitioning, CMK encryption, and TTL is the standard enterprise pattern for OAuth token storage (used by Zapier, Salesforce, Google Workspace Marketplace apps, etc.). The alternative — Secrets Manager per user per provider — costs $0.40/secret/month and becomes expensive with multiple users and providers. Session-bound tokens degrade UX unacceptably for a personal assistant. The no-database constraint was intended to prevent user *data* persistence, not secure credential management infrastructure.
+**Revisit trigger**: When approaching multi-tenant scale or any compliance requirement (SOC2, HIPAA). At that point, evaluate per-user KMS keys and/or migration of Plaid tokens specifically to Secrets Manager (consistent with D-04's spirit).
+**Status**: Active — revisit before enterprise/compliance scale
+
+---
+
 ## D-10 — Mock Provider Mode for Dev CI/CD
 **Date**: ~2026-04-06  
 **Decision**: Deploy to dev with `MOCK_PROVIDER_MODE=true` via CI/CD before live provider credentials are available.  

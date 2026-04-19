@@ -134,7 +134,7 @@ jobs:
           environment             = "staging"
           aws_region              = "${{ vars.AWS_REGION || 'us-east-1' }}"
           mock_provider_mode      = ${{ vars.MOCK_PROVIDER_MODE || 'false' }}
-          cors_allow_origins      = [${{ vars.TF_CORS_ORIGINS || '"*"' }}]
+          cors_allow_origins      = [${{ vars.TF_CORS_ORIGINS || '"https://staging.integreat.app"' }}]
           bedrock_router_model_id = "${{ vars.TF_BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0' }}"
           callback_urls           = [${{ vars.TF_CALLBACK_URLS || '' }}]
           logout_urls             = [${{ vars.TF_LOGOUT_URLS || '' }}]
