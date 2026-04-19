@@ -21,7 +21,7 @@ jobs:
           python-version: '3.12'
       - name: Run backend unit tests
         run: |
-          pip install pytest pytest-cov
+          pip install -e "backend[test]"
           PYTHONPATH=backend/src python -m pytest backend/tests/ --cov=backend/src --cov-report=xml:backend/coverage.xml --cov-fail-under=80
 
   mobile-typecheck:
@@ -130,6 +130,37 @@ jobs:
 
       - name: Terraform apply
         run: terraform -chdir=terraform/environments/dev apply -auto-approve tfplan
+
+      # ── Post-deploy Lambda code integrity check ─────────────────────────────
+      # Computes the base64-encoded SHA256 of the local zip built by archive_file
+      # and asserts it matches the CodeSha256 AWS reports for the deployed function.
+      # A mismatch means Terraform reported "no changes" but the code diverged —
+      # exactly the silent failure mode that caused the 2026-04-08 stale deploy.
+      - name: Verify deployed Lambda SHA matches local build
+        run: |
+          FUNCTION_NAME=$(terraform -chdir=terraform/environments/dev output -raw lambda_function_name)
+          ZIP_PATH="terraform/environments/dev/build/orchestrator.zip"
+
+          # AWS CodeSha256 is base64(sha256(zip bytes))
+          DEPLOYED_SHA=$(aws lambda get-function \
+            --function-name "$FUNCTION_NAME" \
+            --region "${{ vars.AWS_REGION || 'us-east-1' }}" \
+            --query "Configuration.CodeSha256" \
+            --output text)
+
+          LOCAL_SHA=$(openssl dgst -sha256 -binary "$ZIP_PATH" | base64)
+
+          echo "Deployed SHA : $DEPLOYED_SHA"
+          echo "Local ZIP SHA: $LOCAL_SHA"
+
+          if [ "$DEPLOYED_SHA" != "$LOCAL_SHA" ]; then
+            echo "ERROR: SHA mismatch — the deployed Lambda code does not match the locally built zip."
+            echo "This indicates Terraform applied without updating the function code."
+            echo "Investigate source_code_hash computation and ensure archive_file output matches the deployed artefact."
+            exit 1
+          fi
+
+          echo "SHA verification passed — deployed code matches local build."
 
       # ── Derive mobile API URL from Terraform outputs ────────────────────────
       # Overwrites EXPO_PUBLIC_API_BASE_URL in mobile/.env so the value always
