@@ -49,6 +49,12 @@ variable "managed_policy_arns" {
   default = []
 }
 
+variable "kms_key_arn" {
+  type        = string
+  description = "ARN of the KMS key used to encrypt Lambda environment variables and the CloudWatch log group. When null, AWS-managed encryption is used."
+  default     = null
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

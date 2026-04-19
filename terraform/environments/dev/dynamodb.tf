@@ -12,6 +12,11 @@ resource "aws_dynamodb_table" "oauth_tokens" {
   # PAY_PER_REQUEST billing which handles capacity automatically without needing
   # a separate auto-scaling policy resource.
 
+  # checkov:skip=CKV_AWS_119: A Customer Managed KMS key is not used for this table.
+  # It stores transient dev OAuth tokens that are re-acquirable via a new OAuth flow;
+  # there are no compliance obligations requiring a CMK here, and the AWS-managed
+  # DynamoDB service key (aws/dynamodb) provides sufficient encryption at rest for dev.
+
   name         = "ai-assistant-dev-tokens"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "provider"

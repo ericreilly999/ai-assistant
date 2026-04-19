@@ -129,6 +129,7 @@ module "api" {
   integration_uri      = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
   cors_allow_origins   = var.cors_allow_origins
+  kms_key_arn          = module.kms.key_arn
   authorizer_issuer    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${module.auth.user_pool_id}"
   authorizer_audience  = [module.auth.app_client_id]
   routes = [

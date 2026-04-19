@@ -8,10 +8,21 @@ locals {
   })
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 data "archive_file" "orchestrator" {
   type        = "zip"
   source_dir  = "${path.root}/../../../backend/src"
   output_path = "${path.root}/build/orchestrator.zip"
+}
+
+module "kms" {
+  source                  = "../../modules/kms_key"
+  name                    = local.name_prefix
+  description             = "KMS key for encrypting ${local.application_name} secrets and sensitive data"
+  deletion_window_in_days = 10
+  tags                    = local.tags
 }
 
 module "auth" {
@@ -26,6 +37,7 @@ module "secrets" {
   source       = "../../modules/secrets_bundle"
   name_prefix  = local.name_prefix
   secret_names = ["google-oauth", "microsoft-oauth", "plaid"]
+  kms_key_arn  = module.kms.key_arn
   tags         = local.tags
 }
 
@@ -36,14 +48,28 @@ module "bedrock" {
 }
 
 data "aws_iam_policy_document" "lambda_runtime" {
+  # CKV_AWS_356: scope Bedrock actions to foundation-model and guardrail ARNs in this
+  # account/region rather than using a bare "*". Cross-region inference profile ARNs
+  # (us.*) are included because Nova Pro routes through the us. prefix.
   statement {
-    sid = "BedrockRuntime"
+    sid = "BedrockInvokeModel"
     actions = [
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
-      "bedrock:ApplyGuardrail",
     ]
-    resources = ["*"]
+    resources = [
+      "arn:aws:bedrock:${data.aws_region.current.name}::foundation-model/*",
+      "arn:aws:bedrock:us-east-1::foundation-model/*",
+      "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+    ]
+  }
+
+  statement {
+    sid     = "BedrockApplyGuardrail"
+    actions = ["bedrock:ApplyGuardrail"]
+    resources = [
+      "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:guardrail/*",
+    ]
   }
 
   statement {
@@ -62,6 +88,7 @@ module "lambda" {
   source_code_hash       = data.archive_file.orchestrator.output_base64sha256
   timeout                = 30
   memory_size            = 512
+  kms_key_arn            = module.kms.key_arn
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
   has_additional_policy  = true
   environment_variables = {
@@ -88,6 +115,7 @@ module "api" {
   integration_uri      = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
   cors_allow_origins   = var.cors_allow_origins
+  kms_key_arn          = module.kms.key_arn
   authorizer_issuer    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${module.auth.user_pool_id}"
   authorizer_audience  = [module.auth.app_client_id]
   routes = [
