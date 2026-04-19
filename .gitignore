@@ -18,3 +18,5 @@ backend/.local/
 .claude/settings.local.json
 tmpapigw_test.json
 project-status/
+# Terraform backend config — contains real bucket names; use backend.hcl.example as template
+terraform/environments/**/backend.hcl

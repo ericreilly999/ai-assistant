@@ -1,5 +1,5 @@
-bucket       = \"replace-me-prod-tfstate\"
-key          = \"ai-assistant/prod/terraform.tfstate\"
-region       = \"us-east-1\"
+bucket       = "YOUR-TFSTATE-BUCKET-NAME"
+key          = "ai-assistant/prod/terraform.tfstate"
+region       = "us-east-1"
 use_lockfile = true
 encrypt      = true
