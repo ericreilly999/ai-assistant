@@ -112,8 +112,12 @@ class LocalIntegrationService:
         if not self.config.google_client_id or not self.config.google_client_secret:
             raise ValueError("Google OAuth credentials are not configured.")
         stored = self._store.get_tokens("google_oauth_state", user_id=self._user_id)
-        if not stored or not hmac.compare_digest(str(state), str(stored.get("state", ""))):
+        stored_state_val = stored.get("state", "") if stored else ""
+        if not isinstance(stored_state_val, str):
+            raise ValueError("Stored OAuth state is malformed")
+        if not stored or not hmac.compare_digest(str(state), stored_state_val):
             raise ValueError("OAuth state mismatch — possible CSRF attack")
+        # Security: delete state before token exchange to prevent replay
         self._store.clear_tokens("google_oauth_state", user_id=self._user_id)
         tokens = http_post_form(
             _GOOGLE_TOKEN_URL,
@@ -162,8 +166,12 @@ class LocalIntegrationService:
         if not self.config.microsoft_client_id or not self.config.microsoft_client_secret:
             raise ValueError("Microsoft OAuth credentials are not configured.")
         stored = self._store.get_tokens("microsoft_oauth_state", user_id=self._user_id)
-        if not stored or not hmac.compare_digest(str(state), str(stored.get("state", ""))):
+        stored_state_val = stored.get("state", "") if stored else ""
+        if not isinstance(stored_state_val, str):
+            raise ValueError("Stored OAuth state is malformed")
+        if not stored or not hmac.compare_digest(str(state), stored_state_val):
             raise ValueError("OAuth state mismatch — possible CSRF attack")
+        # Security: delete state before token exchange to prevent replay
         self._store.clear_tokens("microsoft_oauth_state", user_id=self._user_id)
         tokens = http_post_form(
             _MS_TOKEN_URL,

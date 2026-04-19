@@ -4,6 +4,7 @@ import base64
 import html
 import json
 import logging
+import re
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -15,6 +16,18 @@ from assistant_app.registry import ProviderRegistry
 from assistant_app.response import html_response, json_response, redirect_response
 
 logger = logging.getLogger(__name__)
+
+
+def _redact_body(body: str) -> str:
+    """Redact OAuth token values and Plaid secrets from provider response bodies before logging."""
+    if not body:
+        return body
+    # Redact JSON fields whose values look like tokens/secrets
+    return re.sub(
+        r'("(?:access_token|refresh_token|id_token|token|secret|plaid_secret|client_secret)"\s*:\s*")([\w\-\._~]+)(")',
+        r'\1[REDACTED]\3',
+        body
+    )
 
 
 def _extract_user_id(event: dict[str, Any]) -> str:
@@ -196,7 +209,7 @@ def build_handler(
                 "Provider request failed: %s %s — body: %s",
                 exc.status_code,
                 getattr(exc, "url", ""),
-                exc.body,
+                _redact_body(exc.body or ""),
             )
             return json_response(
                 exc.status_code or 502,
