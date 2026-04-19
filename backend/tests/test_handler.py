@@ -378,6 +378,144 @@ class HandlerTests(unittest.TestCase):
             "2026-04-01T00:00:00Z", "2026-04-30T23:59:59Z"
         )
 
+    # ------------------------------------------------------------------
+    # Google calendar dev endpoint — parameter validation
+    # ------------------------------------------------------------------
+
+    def test_google_calendar_events_missing_both_params_returns_400(self) -> None:
+        """GET /v1/dev/google/calendar/events with no query params must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(self._req("GET", "/v1/dev/google/calendar/events"), None)
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start and end query parameters are required")
+        mock_live_service.list_google_calendar_events.assert_not_called()
+
+    def test_google_calendar_events_missing_end_param_returns_400(self) -> None:
+        """GET /v1/dev/google/calendar/events with only start param must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req("GET", "/v1/dev/google/calendar/events", query={"start": "2026-04-01T00:00:00Z"}),
+            None,
+        )
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start and end query parameters are required")
+        mock_live_service.list_google_calendar_events.assert_not_called()
+
+    def test_google_calendar_events_missing_start_param_returns_400(self) -> None:
+        """GET /v1/dev/google/calendar/events with only end param must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req("GET", "/v1/dev/google/calendar/events", query={"end": "2026-04-30T23:59:59Z"}),
+            None,
+        )
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start and end query parameters are required")
+        mock_live_service.list_google_calendar_events.assert_not_called()
+
+    def test_google_calendar_events_with_both_params_delegates_to_service(self) -> None:
+        """GET /v1/dev/google/calendar/events with both params calls the service."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        mock_live_service.list_google_calendar_events.return_value = {
+            "events": [],
+            "provider": "google_calendar",
+        }
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req(
+                "GET",
+                "/v1/dev/google/calendar/events",
+                query={"start": "2026-04-01T00:00:00Z", "end": "2026-04-30T23:59:59Z"},
+            ),
+            None,
+        )
+        self.assertEqual(response["statusCode"], 200)
+        mock_live_service.list_google_calendar_events.assert_called_once_with(
+            "2026-04-01T00:00:00Z", "2026-04-30T23:59:59Z"
+        )
+
+    # ------------------------------------------------------------------
+    # Plaid transactions dev endpoint — parameter validation
+    # ------------------------------------------------------------------
+
+    def test_plaid_transactions_missing_both_params_returns_400(self) -> None:
+        """GET /v1/dev/plaid/transactions with no query params must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(self._req("GET", "/v1/dev/plaid/transactions"), None)
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start_date and end_date query parameters are required")
+        mock_live_service.list_plaid_transactions.assert_not_called()
+
+    def test_plaid_transactions_missing_end_date_param_returns_400(self) -> None:
+        """GET /v1/dev/plaid/transactions with only start_date param must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req("GET", "/v1/dev/plaid/transactions", query={"start_date": "2026-04-01"}),
+            None,
+        )
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start_date and end_date query parameters are required")
+        mock_live_service.list_plaid_transactions.assert_not_called()
+
+    def test_plaid_transactions_missing_start_date_param_returns_400(self) -> None:
+        """GET /v1/dev/plaid/transactions with only end_date param must return 400."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req("GET", "/v1/dev/plaid/transactions", query={"end_date": "2026-04-30"}),
+            None,
+        )
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(body["error"], "start_date and end_date query parameters are required")
+        mock_live_service.list_plaid_transactions.assert_not_called()
+
+    def test_plaid_transactions_with_both_params_delegates_to_service(self) -> None:
+        """GET /v1/dev/plaid/transactions with both params calls the service."""
+        from unittest.mock import MagicMock
+
+        mock_live_service = MagicMock()
+        mock_live_service.list_plaid_transactions.return_value = {
+            "transactions": [],
+            "provider": "plaid",
+        }
+        handler = build_handler(self.config, self.registry, mock_live_service)
+        response = handler(
+            self._req(
+                "GET",
+                "/v1/dev/plaid/transactions",
+                query={"start_date": "2026-04-01", "end_date": "2026-04-30"},
+            ),
+            None,
+        )
+        self.assertEqual(response["statusCode"], 200)
+        mock_live_service.list_plaid_transactions.assert_called_once_with(
+            "2026-04-01", "2026-04-30"
+        )
+
     def test_execute_returns_502_propagates_for_provider_errors(self) -> None:
         from unittest.mock import patch
 
