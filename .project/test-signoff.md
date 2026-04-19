@@ -97,3 +97,40 @@ tests/test_orchestrator.py::OrchestratorThinkingTagStrippingTests::test_thinking
 ```
 
 **Sign-off decision**: PASS — regression finding from PR #15 code review is closed.
+
+---
+
+### PR #19 — Hardened Thinking-Tag Regex (fix/harden-thinking-tag-regex)
+
+**Date**: 2026-04-18
+**Branch**: `fix/harden-thinking-tag-regex`
+**Validated by**: QA Engineer
+
+#### Summary
+
+Hardened thinking-tag stripping regex in `orchestrator.py` to handle attribute-bearing and mixed-case tag variants that the original pattern missed. SRE investigation identified that Nova Pro may emit `<thinking type="chain_of_thought">` — the original `r"<thinking>.*?</thinking>"` would silently skip this.
+
+#### Changes validated
+
+| File | Change |
+|------|--------|
+| `orchestrator.py` | `<thinking>` and `<answer>` regexes: added `\b[^>]*` (matches attributes) + `re.IGNORECASE` (handles `<Thinking>`, `<THINKING>`) |
+| `test_orchestrator.py` | `test_thinking_tag_with_attributes_is_stripped` — injects `<thinking type="chain_of_thought">Internal reasoning here</thinking>\n\n<answer>The actual answer.</answer>` and asserts `result.message == "The actual answer."` |
+
+#### Tests run
+
+| Class | Tests | Result |
+|-------|-------|--------|
+| `OrchestratorThinkingTagStrippingTests` | 5 | 5 passed |
+
+```
+test_answer_wrapper_tags_are_stripped                   PASSED
+test_multiple_thinking_blocks_all_stripped              PASSED
+test_thinking_and_answer_tags_stripped_together         PASSED
+test_thinking_tag_with_attributes_is_stripped           PASSED
+test_thinking_tags_are_stripped                         PASSED
+
+5 passed in 0.19s
+```
+
+**Sign-off decision**: PASS — attribute-bearing tag gap identified by SRE is closed. Regex now handles `<thinking>`, `<thinking type="...">`, `<THINKING>`, and all `<answer>` variants.
