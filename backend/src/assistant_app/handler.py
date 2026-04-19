@@ -104,6 +104,8 @@ def build_handler(
                 return json_response(200, dev_service.export_google_drive_document(file_id, mime_type))
 
             if method == "GET" and path == "/v1/dev/microsoft/calendar/events":
+                if not query.get("start") or not query.get("end"):
+                    return json_response(400, {"error": "start and end query parameters are required"})
                 return json_response(200, dev_service.list_microsoft_calendar_events(query.get("start"), query.get("end")))
 
             if method == "POST" and path == "/v1/dev/microsoft/calendar/events":
