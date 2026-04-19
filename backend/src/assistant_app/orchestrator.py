@@ -141,10 +141,12 @@ class AssistantOrchestrator:
                             text = block["text"]
                             break
 
-                    # Strip inline reasoning tags emitted by thinking-capable models (e.g. Nova Pro)
-                    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL).strip()
-                    # Unwrap <answer> wrapper tags Nova Pro may emit around the final response
-                    text = re.sub(r"<answer>(.*?)</answer>", r"\1", text, flags=re.DOTALL).strip()
+                    # Strip inline reasoning tags emitted by thinking-capable models (e.g. Nova Pro).
+                    # \b prevents matching e.g. <thinkingmore>; [^>]* allows attributes like
+                    # type="chain_of_thought"; re.IGNORECASE handles <Thinking> / <THINKING>.
+                    text = re.sub(r"<thinking\b[^>]*>.*?</thinking>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+                    # Unwrap <answer> wrapper tags Nova Pro may emit around the final response.
+                    text = re.sub(r"<answer\b[^>]*>(.*?)</answer>", r"\1", text, flags=re.DOTALL | re.IGNORECASE).strip()
 
                     # Apply output guardrail
                     passed, safe_text = self._guardrail.check(text, source="OUTPUT")

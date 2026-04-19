@@ -300,6 +300,22 @@ class OrchestratorThinkingTagStrippingTests(unittest.TestCase):
         self.assertNotIn("first", result.message)
         self.assertNotIn("second", result.message)
 
+    def test_thinking_tag_with_attributes_is_stripped(self) -> None:
+        """Nova Pro may emit <thinking type="..."> with attributes — must still be stripped."""
+        orch = _make_orchestrator([
+            _text_response(
+                '<thinking type="chain_of_thought">Internal reasoning here</thinking>\n\n'
+                '<answer>The actual answer.</answer>'
+            ),
+        ])
+        result = orch.plan({"message": "What tasks do I have?"})
+        self.assertEqual(result.intent, "agent")
+        self.assertNotIn("<thinking", result.message)   # catches all attribute variants
+        self.assertNotIn("</thinking>", result.message)
+        self.assertNotIn("<answer>", result.message)
+        self.assertNotIn("Internal reasoning here", result.message)
+        self.assertEqual(result.message, "The actual answer.")
+
 
 class OrchestratorExecuteTests(unittest.TestCase):
     def setUp(self) -> None:
