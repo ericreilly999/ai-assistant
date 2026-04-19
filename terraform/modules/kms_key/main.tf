@@ -39,7 +39,14 @@ resource "aws_kms_alias" "this" {
   target_key_id = aws_kms_key.this.key_id
 }
 
-# Grant Lambda execution role access to the key
+# Optional KMS grant for the Lambda execution role.
+#
+# NOTE: No environment currently passes lambda_role_arn so this resource is never created
+# (count = 0). Lambda's ability to decrypt environment variables and write encrypted CloudWatch
+# logs is instead guaranteed by the aws_iam_role_policy.kms_decrypt resource in the
+# lambda_service module, which is always created when kms_key_arn is set. That inline IAM
+# policy is the active enforcement path; this grant exists as an alternative mechanism for
+# callers that prefer the KMS grant model over IAM policies (e.g. cross-account scenarios).
 resource "aws_kms_grant" "lambda" {
   count             = var.lambda_role_arn != null ? 1 : 0
   name              = "${var.name}-lambda-grant"

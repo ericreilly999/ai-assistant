@@ -78,3 +78,34 @@ resource "aws_lambda_alias" "live" {
   function_name    = aws_lambda_function.this.function_name
   function_version = aws_lambda_function.this.version
 }
+
+# kms_key_arn is set on aws_lambda_function.this (env var encryption) and on the CloudWatch log
+# group (CKV_AWS_158). AWSLambdaBasicExecutionRole does NOT include kms:Decrypt or
+# kms:GenerateDataKey*, so without an explicit grant the Lambda runtime will fail to decrypt
+# environment variables the moment the CMK is activated.
+#
+# This policy grants the minimum required KMS actions scoped to the exact key ARN, satisfying
+# CKV_AWS_356 (no wildcard resource). The aws_kms_grant.lambda resource in the kms_key module
+# is an alternative mechanism but is not wired from any environment — this inline policy is the
+# active path.
+resource "aws_iam_role_policy" "kms_decrypt" {
+  count = var.kms_key_arn != null ? 1 : 0
+  name  = "${var.function_name}-kms-decrypt"
+  role  = aws_iam_role.this.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "KMSDecryptEnvVarsAndLogs"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = var.kms_key_arn
+      }
+    ]
+  })
+}

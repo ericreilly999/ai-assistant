@@ -21,7 +21,7 @@ module "kms" {
   source                  = "../../modules/kms_key"
   name                    = local.name_prefix
   description             = "KMS key for encrypting ${local.application_name} secrets and sensitive data"
-  deletion_window_in_days = 10
+  deletion_window_in_days = 30
   tags                    = local.tags
 }
 
