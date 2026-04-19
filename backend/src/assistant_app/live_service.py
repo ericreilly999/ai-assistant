@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hmac
+import logging
 import secrets
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from assistant_app.config import AppConfig
 from assistant_app.dev_store import DevTokenStore
@@ -24,28 +28,32 @@ _GOOGLE_CALENDAR_BASE = "https://www.googleapis.com/calendar/v3"
 _GOOGLE_TASKS_BASE = "https://tasks.googleapis.com/tasks/v1"
 _GOOGLE_DRIVE_BASE = "https://www.googleapis.com/drive/v3"
 
-_GOOGLE_SCOPES = " ".join([
-    "openid",
-    "email",
-    "profile",
-    "https://www.googleapis.com/auth/calendar",
-    "https://www.googleapis.com/auth/tasks",
-    "https://www.googleapis.com/auth/drive.readonly",
-])
+_GOOGLE_SCOPES = " ".join(
+    [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/tasks",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
+)
 
 _MS_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 _MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 _MS_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
-_MS_SCOPES = " ".join([
-    "openid",
-    "email",
-    "profile",
-    "offline_access",
-    "Calendars.ReadWrite",
-    "Tasks.ReadWrite",
-    "Files.Read",
-])
+_MS_SCOPES = " ".join(
+    [
+        "openid",
+        "email",
+        "profile",
+        "offline_access",
+        "Calendars.ReadWrite",
+        "Tasks.ReadWrite",
+        "Files.Read",
+    ]
+)
 
 
 class LocalIntegrationService:
@@ -103,6 +111,10 @@ class LocalIntegrationService:
     def complete_google_auth(self, code: str, state: str) -> dict[str, Any]:
         if not self.config.google_client_id or not self.config.google_client_secret:
             raise ValueError("Google OAuth credentials are not configured.")
+        stored = self._store.get_tokens("google_oauth_state", user_id=self._user_id)
+        if not stored or not hmac.compare_digest(str(state), str(stored.get("state", ""))):
+            raise ValueError("OAuth state mismatch — possible CSRF attack")
+        self._store.clear_tokens("google_oauth_state", user_id=self._user_id)
         tokens = http_post_form(
             _GOOGLE_TOKEN_URL,
             {
@@ -149,6 +161,10 @@ class LocalIntegrationService:
     def complete_microsoft_auth(self, code: str, state: str) -> dict[str, Any]:
         if not self.config.microsoft_client_id or not self.config.microsoft_client_secret:
             raise ValueError("Microsoft OAuth credentials are not configured.")
+        stored = self._store.get_tokens("microsoft_oauth_state", user_id=self._user_id)
+        if not stored or not hmac.compare_digest(str(state), str(stored.get("state", ""))):
+            raise ValueError("OAuth state mismatch — possible CSRF attack")
+        self._store.clear_tokens("microsoft_oauth_state", user_id=self._user_id)
         tokens = http_post_form(
             _MS_TOKEN_URL,
             {
@@ -210,8 +226,10 @@ class LocalIntegrationService:
         resolved_id = list_id or self._resolve_google_tasklist_id(list_name)
         url = f"{_GOOGLE_TASKS_BASE}/lists/{resolved_id}/tasks?showCompleted=true&maxResults=100"
         raw = http_get(url, self._google_headers())
-        tasks = [adapter.normalize_task({**item, "list_name": list_name or resolved_id}).to_dict()
-                 for item in raw.get("items", [])]
+        tasks = [
+            adapter.normalize_task({**item, "list_name": list_name or resolved_id}).to_dict()
+            for item in raw.get("items", [])
+        ]
         return {"tasks": tasks, "provider": "google_tasks"}
 
     def add_google_grocery_items(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -286,7 +304,9 @@ class LocalIntegrationService:
     def list_microsoft_tasklists(self) -> dict[str, Any]:
         url = f"{_MS_GRAPH_BASE}/me/todo/lists"
         raw = http_get(url, self._ms_headers())
-        lists = [{"id": item["id"], "displayName": item.get("displayName", "")} for item in raw.get("value", [])]
+        lists = [
+            {"id": item["id"], "displayName": item.get("displayName", "")} for item in raw.get("value", [])
+        ]
         return {"task_lists": lists, "provider": "microsoft_todo"}
 
     def list_microsoft_tasks(self, list_id: str | None, list_name: str | None) -> dict[str, Any]:
@@ -294,8 +314,10 @@ class LocalIntegrationService:
         resolved_id = list_id or self._resolve_ms_tasklist_id(list_name)
         url = f"{_MS_GRAPH_BASE}/me/todo/lists/{resolved_id}/tasks?$top=100"
         raw = http_get(url, self._ms_headers())
-        tasks = [adapter.normalize_task({**item, "list_name": list_name or resolved_id}).to_dict()
-                 for item in raw.get("value", [])]
+        tasks = [
+            adapter.normalize_task({**item, "list_name": list_name or resolved_id}).to_dict()
+            for item in raw.get("value", [])
+        ]
         return {"tasks": tasks, "provider": "microsoft_todo"}
 
     def add_microsoft_grocery_items(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -345,11 +367,15 @@ class LocalIntegrationService:
             },
         )
         access_token = exchange_response["access_token"]
-        self._store.set_tokens("plaid", {
-            "access_token": access_token,
-            "institution_id": institution_id,
-            "stored_at": datetime.now(timezone.utc).isoformat(),
-        }, user_id=self._user_id)
+        self._store.set_tokens(
+            "plaid",
+            {
+                "access_token": access_token,
+                "institution_id": institution_id,
+                "stored_at": datetime.now(timezone.utc).isoformat(),
+            },
+            user_id=self._user_id,
+        )
         return {"institution_id": institution_id, "access_token_stored": True}
 
     def list_plaid_accounts(self) -> dict[str, Any]:

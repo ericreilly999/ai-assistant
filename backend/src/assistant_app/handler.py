@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import json
 import logging
 from typing import Any
@@ -191,12 +192,15 @@ def build_handler(
         except ValueError as exc:
             return json_response(400, {"message": str(exc)})
         except HttpRequestError as exc:
+            logger.error(
+                "Provider request failed: %s %s — body: %s",
+                exc.status_code,
+                getattr(exc, "url", ""),
+                exc.body,
+            )
             return json_response(
                 exc.status_code or 502,
-                {
-                    "message": str(exc),
-                    "provider_response": exc.body[:1000],
-                },
+                {"message": "Provider request failed. Please try again."},
             )
 
         return json_response(404, {"message": f"No route for {method} {path}"})
@@ -261,14 +265,16 @@ def _oauth_not_configured_page(provider_name: str, message: str) -> str:
 
 
 def _oauth_callback_page(provider_name: str, result: dict[str, Any]) -> str:
+    escaped = html.escape(json.dumps(result, indent=2))
     return (
         "<html><body style=\"font-family: sans-serif; padding: 24px;\">"
-        f"<h1>{provider_name} Connected</h1>"
-        "<p>The local dev integration is now authorized.</p>"
-        f"<pre>{json.dumps(result, indent=2)}</pre>"
-        "<p>You can close this window and continue with local smoke validation.</p>"
+        f"<h1>{html.escape(provider_name)} Connected</h1>"
+        "<p>The local dev integration is now authorized. You may close this window.</p>"
+        f"<pre>{escaped}</pre>"
+        "<p>You can continue with local smoke validation.</p>"
         "</body></html>"
     )
+
 
 
 lambda_handler = build_handler()
