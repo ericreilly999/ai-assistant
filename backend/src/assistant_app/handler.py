@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 def _redact_body(body: str) -> str:
     """Redact OAuth token values and Plaid secrets from provider response bodies before logging."""
     if not body:
-        return body
-    # Redact JSON fields whose values look like tokens/secrets
+        return ""
+    # Redact JSON fields whose values look like tokens/secrets.
+    # [^"]+ captures the full extent of any JSON string value, including
+    # base64url characters (+, =, /) that appear in JWT id_token values.
     return re.sub(
-        r'("(?:access_token|refresh_token|id_token|token|secret|plaid_secret|client_secret)"\s*:\s*")([\w\-\._~]+)(")',
+        r'("(?:access_token|refresh_token|id_token|token|secret|plaid_secret|client_secret)"\s*:\s*")([^"]+)(")',
         r'\1[REDACTED]\3',
         body
     )

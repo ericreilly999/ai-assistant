@@ -573,9 +573,17 @@ class RedactBodyTests(unittest.TestCase):
     def test_returns_empty_string_unchanged(self) -> None:
         self.assertEqual(_redact_body(""), "")
 
-    def test_returns_none_unchanged(self) -> None:
-        # _redact_body guards against falsy input
-        self.assertIsNone(_redact_body(None))
+    def test_returns_empty_string_for_none(self) -> None:
+        # _redact_body has a str -> str signature; None must return "" not None
+        self.assertEqual(_redact_body(None), "")
+
+    def test_redacts_base64url_id_token(self) -> None:
+        # JWT id_token values contain +, =, / which the old [\w\-\._~]+ regex missed
+        token = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc+def/ghi==end"
+        body = f'{{"id_token": "{token}", "token_type": "Bearer"}}'
+        result = _redact_body(body)
+        self.assertIn('"id_token": "[REDACTED]"', result)
+        self.assertNotIn(token, result)
 
     def test_redacts_multiple_sensitive_fields_in_one_body(self) -> None:
         body = '{"access_token": "tok123", "refresh_token": "ref456", "scope": "openid"}'

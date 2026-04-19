@@ -7,8 +7,6 @@ import urllib.parse
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from assistant_app.config import AppConfig
 from assistant_app.dev_store import DevTokenStore
 from assistant_app.http_client import (
@@ -21,6 +19,8 @@ from assistant_app.http_client import (
 )
 from assistant_app.models import DocumentReference
 from assistant_app.registry import ProviderRegistry
+
+logger = logging.getLogger(__name__)
 
 _GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
