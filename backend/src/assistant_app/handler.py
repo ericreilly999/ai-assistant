@@ -81,6 +81,8 @@ def build_handler(
                 return html_response(200, _oauth_callback_page("Microsoft", result))
 
             if method == "GET" and path == "/v1/dev/google/calendar/events":
+                if not query.get("start") or not query.get("end"):
+                    return json_response(400, {"error": "start and end query parameters are required"})
                 return json_response(200, dev_service.list_google_calendar_events(query.get("start"), query.get("end")))
 
             if method == "POST" and path == "/v1/dev/google/calendar/events":
@@ -129,6 +131,8 @@ def build_handler(
                 return json_response(200, dev_service.list_plaid_accounts())
 
             if method == "GET" and path == "/v1/dev/plaid/transactions":
+                if not query.get("start_date") or not query.get("end_date"):
+                    return json_response(400, {"error": "start_date and end_date query parameters are required"})
                 return json_response(200, dev_service.list_plaid_transactions(query.get("start_date"), query.get("end_date")))
 
             if method == "POST" and path == "/v1/chat/plan":
