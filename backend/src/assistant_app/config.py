@@ -50,7 +50,7 @@ def _validate_live_credentials() -> None:
         "PLAID_CLIENT_ID": os.getenv("PLAID_CLIENT_ID"),
         "PLAID_SECRET": os.getenv("PLAID_SECRET"),
     }
-    missing = [k for k, v in required.items() if not v]
+    missing = [k for k, v in required.items() if not (v and v.strip())]
     if missing:
         raise RuntimeError(
             f"Lambda started in live mode but required credentials are missing: {missing}. "
@@ -104,7 +104,8 @@ class AppConfig:
         from assistant_app.secrets_manager import load_secrets_from_manager
         load_secrets_from_manager()
 
-        # Validate required credentials are present when running live in Lambda
+        # Validate after Secrets Manager load but before local .env.local fallback —
+        # in Lambda there is no .env.local, so this is the only chance to catch missing creds.
         if os.getenv("AWS_LAMBDA_FUNCTION_NAME") and not _bool_env("MOCK_PROVIDER_MODE", True):
             _validate_live_credentials()
 

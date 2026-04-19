@@ -35,12 +35,12 @@ module "auth" {
 }
 
 module "secrets" {
-  source                   = "../../modules/secrets_bundle"
-  name_prefix              = local.name_prefix
-  secret_names             = ["google-oauth", "microsoft-oauth", "plaid"]
-  kms_key_arn              = module.kms.key_arn
-  recovery_window_in_days  = 7
-  tags                     = local.tags
+  source                  = "../../modules/secrets_bundle"
+  name_prefix             = local.name_prefix
+  secret_names            = ["google-oauth", "microsoft-oauth", "plaid"]
+  kms_key_arn             = module.kms.key_arn
+  recovery_window_in_days = 7
+  tags                    = local.tags
 }
 
 module "bedrock" {
