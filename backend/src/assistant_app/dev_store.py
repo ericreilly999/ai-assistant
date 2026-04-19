@@ -23,7 +23,7 @@ class DevTokenStore:
 
         table_name = os.environ.get("OAUTH_TOKEN_TABLE")
         if table_name:
-            import boto3
+            import boto3  # type: ignore[import-untyped]
             self._table = boto3.resource("dynamodb").Table(table_name)
         else:
             self._table = None

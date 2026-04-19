@@ -27,7 +27,7 @@ def load_secrets_from_manager() -> dict[str, str]:
         return {}
 
     try:
-        import boto3
+        import boto3  # type: ignore[import-untyped]
     except ImportError:
         logger.warning("boto3 not available; skipping Secrets Manager loading")
         return {}
