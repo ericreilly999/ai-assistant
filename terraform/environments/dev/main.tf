@@ -147,12 +147,49 @@ module "api" {
     "GET /oauth/google/start",
     "GET /oauth/google/callback",
     "GET /oauth/microsoft/start",
-    "GET /oauth/microsoft/callback"
+    "GET /oauth/microsoft/callback",
+    # Dev-only scaffolding routes — declared explicitly so the JWT authorizer applies;
+    # without explicit declaration these paths would fall through the unauthenticated
+    # $default catch-all route.
+    "GET /v1/dev/connections",
+    "GET /v1/dev/google/calendar/events",
+    "POST /v1/dev/google/calendar/events",
+    "GET /v1/dev/google/tasks/lists",
+    "GET /v1/dev/google/tasks/items",
+    "POST /v1/dev/google/tasks/grocery-items",
+    "GET /v1/dev/google/drive/documents",
+    "GET /v1/dev/google/drive/export",
+    "GET /v1/dev/microsoft/calendar/events",
+    "POST /v1/dev/microsoft/calendar/events",
+    "GET /v1/dev/microsoft/todo/lists",
+    "GET /v1/dev/microsoft/todo/items",
+    "POST /v1/dev/microsoft/todo/grocery-items",
+    "POST /v1/dev/plaid/sandbox/bootstrap",
+    "GET /v1/dev/plaid/accounts",
+    "GET /v1/dev/plaid/transactions"
   ]
   protected_routes = [
     "GET /v1/integrations",
     "POST /v1/chat/plan",
-    "POST /v1/chat/execute"
+    "POST /v1/chat/execute",
+    # All dev scaffolding routes require JWT auth so live provider credentials
+    # are never reachable by unauthenticated callers, even in the dev environment.
+    "GET /v1/dev/connections",
+    "GET /v1/dev/google/calendar/events",
+    "POST /v1/dev/google/calendar/events",
+    "GET /v1/dev/google/tasks/lists",
+    "GET /v1/dev/google/tasks/items",
+    "POST /v1/dev/google/tasks/grocery-items",
+    "GET /v1/dev/google/drive/documents",
+    "GET /v1/dev/google/drive/export",
+    "GET /v1/dev/microsoft/calendar/events",
+    "POST /v1/dev/microsoft/calendar/events",
+    "GET /v1/dev/microsoft/todo/lists",
+    "GET /v1/dev/microsoft/todo/items",
+    "POST /v1/dev/microsoft/todo/grocery-items",
+    "POST /v1/dev/plaid/sandbox/bootstrap",
+    "GET /v1/dev/plaid/accounts",
+    "GET /v1/dev/plaid/transactions"
   ]
   tags = local.tags
 }
