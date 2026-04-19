@@ -87,6 +87,8 @@ module "lambda" {
     MICROSOFT_OAUTH_SECRET_ARN = module.secrets.secret_arns["microsoft-oauth"]
     PLAID_SECRET_ARN           = module.secrets.secret_arns["plaid"]
     CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
+    GOOGLE_REDIRECT_URI        = "https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/google/callback"
+    MICROSOFT_REDIRECT_URI     = "https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/microsoft/callback"
   }
   tags = local.tags
 }
@@ -104,7 +106,11 @@ module "api" {
     "GET /health",
     "GET /v1/integrations",
     "POST /v1/chat/plan",
-    "POST /v1/chat/execute"
+    "POST /v1/chat/execute",
+    "GET /oauth/google/start",
+    "GET /oauth/google/callback",
+    "GET /oauth/microsoft/start",
+    "GET /oauth/microsoft/callback"
   ]
   protected_routes = [
     "GET /v1/integrations",
