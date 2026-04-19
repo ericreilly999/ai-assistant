@@ -1,4 +1,9 @@
 resource "aws_secretsmanager_secret" "this" {
+  # checkov:skip=CKV2_AWS_57:Automatic rotation is not enabled — these secrets are static
+  # OAuth client credentials (Google, Microsoft) and a Plaid API key that are issued by
+  # third-party identity providers. Rotation requires a provider-specific Lambda rotator
+  # and coordinated credential re-issuance with each provider; this is tracked as a
+  # post-MVP security hardening task and does not apply to dev placeholder values.
   for_each = var.secret_names
 
   name                           = "${var.name_prefix}/${each.value}"

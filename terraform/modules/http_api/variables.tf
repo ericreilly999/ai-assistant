@@ -38,6 +38,12 @@ variable "authorizer_audience" {
   default = []
 }
 
+variable "kms_key_arn" {
+  type        = string
+  description = "ARN of the KMS key used to encrypt the API Gateway access log group. When null, AWS-managed encryption is used."
+  default     = null
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

@@ -62,9 +62,11 @@ resource "aws_apigatewayv2_route" "default_catchall" {
 }
 
 # CKV_AWS_76: access logging log group — always created so the stage can enable access logging.
+# CKV_AWS_158: encrypt with caller-supplied KMS key when provided.
 resource "aws_cloudwatch_log_group" "access_logs" {
   name              = "/aws/apigateway/${var.name}/access-logs"
   retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
   tags              = var.tags
 }
 
