@@ -113,7 +113,7 @@ ai-assistant/
 
 ```bash
 cd backend
-pip install pytest pytest-cov ruff mypy
+pip install -e "backend[test]"
 ```
 
 ### 2. Create `backend/.env.local`
@@ -243,7 +243,8 @@ PYTHONPATH=src python -m pytest tests -v
 2. AWS credentials are obtained via OIDC (no long-lived keys). The IAM role is `ai-assistant-github-actions-deploy`, trusted only for the `dev` GitHub environment.
 3. `terraform.tfvars` is written from GitHub Actions environment variables (not committed to the repo). Required variables are listed in the Configuration reference below.
 4. Terraform plan + apply runs against the `dev` environment using the S3 remote state backend.
-5. Post-deploy smoke tests hit `/health` (retries × 5, 30 s apart) and `/v1/integrations`.
+5. Post-deploy Lambda SHA256 integrity check verifies the deployed code hash matches the local build — fails immediately if there is a mismatch.
+6. Post-deploy smoke tests hit `/health` (retries × 5, 30 s apart) and `/v1/integrations`.
 
 ### Concurrency
 
@@ -290,7 +291,9 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 | `PLAID_ENV` | Plaid environment (`sandbox`) |
 | `BEDROCK_ROUTER_MODEL_ID` | Bedrock model ID for intent routing |
 | `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION` | Bedrock guardrail for content safety |
-| `LOCAL_STORE_FILE` | Path to local OAuth token store (default `backend/.local/dev_tokens.json`) |
+| `GOOGLE_REDIRECT_URI` | Google OAuth callback URL (default `http://localhost:8787/oauth/google/callback`; set to full API GW URL in Lambda) |
+| `MICROSOFT_REDIRECT_URI` | Microsoft OAuth callback URL (default `http://localhost:8787/oauth/microsoft/callback`; set to full API GW URL in Lambda) |
+| `LOCAL_STORE_FILE` | Path to local OAuth token store (default `backend/.local/dev_tokens.json`; auto-switches to `/tmp/dev_tokens.json` in Lambda) |
 
 ### `mobile/.env` (gitignored)
 
