@@ -92,7 +92,7 @@ class TestConnectionStatus(unittest.TestCase):
 
     def test_returns_connected_when_google_has_access_token(self) -> None:
         svc = _make_service()
-        svc._store.get_tokens.side_effect = lambda key: (
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
             {"access_token": "goog-tok"} if key == "google" else None
         )
         status = svc.connection_status()
@@ -100,7 +100,7 @@ class TestConnectionStatus(unittest.TestCase):
 
     def test_returns_connected_when_microsoft_has_access_token(self) -> None:
         svc = _make_service()
-        svc._store.get_tokens.side_effect = lambda key: (
+        svc._store.get_tokens.side_effect = lambda key, **kwargs: (
             {"access_token": "ms-tok"} if key == "microsoft" else None
         )
         status = svc.connection_status()

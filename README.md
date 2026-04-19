@@ -235,6 +235,7 @@ PYTHONPATH=src python -m pytest tests -v
 |----------|----------|------|
 | `ci.yml` | Every PR, every push to `main` | `backend-tests` · `backend-lint` (ruff) · `backend-typecheck` (mypy) · `mobile-typecheck` · `terraform-validate` (dev/staging/prod) · `lambda-package-build` |
 | `deploy-dev.yml` | Push to `main` | CI gate (tests, typecheck, terraform-validate) → build Lambda zip → write `terraform.tfvars` from GitHub vars/secrets → `terraform apply` → smoke test `/health` and `/v1/integrations` |
+| `deploy-staging.yml` | Manual (`workflow_dispatch`) | Same CI gate → build Lambda zip → write `terraform.tfvars` from `staging` GitHub environment → `terraform apply` (staging) → SHA verification → smoke test `/health` and `/v1/integrations` |
 | `auto-fmt.yml` | Manual (`workflow_dispatch`) | `terraform fmt -recursive terraform` → commit if changed |
 
 ### Deploy pipeline detail
@@ -293,7 +294,8 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 | `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION` | Bedrock guardrail for content safety |
 | `GOOGLE_REDIRECT_URI` | Google OAuth callback URL (default `http://localhost:8787/oauth/google/callback`; set to full API GW URL in Lambda) |
 | `MICROSOFT_REDIRECT_URI` | Microsoft OAuth callback URL (default `http://localhost:8787/oauth/microsoft/callback`; set to full API GW URL in Lambda) |
-| `LOCAL_STORE_FILE` | Path to local OAuth token store (default `backend/.local/dev_tokens.json`; auto-switches to `/tmp/dev_tokens.json` in Lambda) |
+| `LOCAL_STORE_FILE` | Path to local OAuth token store (default `backend/.local/dev_tokens.json`; unused in Lambda when `OAUTH_TOKEN_TABLE` is set) |
+| `OAUTH_TOKEN_TABLE` | DynamoDB table name for durable OAuth token storage in Lambda (set automatically by Terraform; unset for local dev — falls back to `LOCAL_STORE_FILE`) |
 
 ### `mobile/.env` (gitignored)
 
@@ -303,7 +305,9 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 | `EXPO_PUBLIC_COGNITO_CLIENT_ID` | Cognito app client ID |
 | `EXPO_PUBLIC_COGNITO_DOMAIN` | Cognito hosted UI base URL |
 
-### GitHub Actions environment: `dev`
+### GitHub Actions environments: `dev` and `staging`
+
+Both environments use the same variable names. The `staging` environment must be created in GitHub repo Settings → Environments before `deploy-staging.yml` can run.
 
 | Name | Type | Description |
 |------|------|-------------|
@@ -315,7 +319,7 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 | `TF_CALLBACK_URLS` | Variable | Cognito OAuth callback URLs (quoted, comma-separated) |
 | `TF_LOGOUT_URLS` | Variable | Cognito logout URLs (quoted, comma-separated) |
 | `TF_BEDROCK_MODEL_ID` | Variable | Bedrock model ID |
-| `TF_COGNITO_DOMAIN` | Variable | Cognito hosted UI prefix (e.g. `ai-assistant-dev`) |
+| `TF_COGNITO_DOMAIN` | Variable | Cognito hosted UI prefix (e.g. `ai-assistant-dev`, `ai-assistant-staging`) |
 
 ### AWS Secrets Manager (dev)
 
@@ -324,6 +328,12 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 | `ai-assistant-dev/google-oauth` | `google-client-id`, `google-client-secret` | `alias/ai-assistant-dev` |
 | `ai-assistant-dev/microsoft-oauth` | `microsoft-client-id`, `microsoft-client-secret` | `alias/ai-assistant-dev` |
 | `ai-assistant-dev/plaid` | `plaid-client-id`, `plaid-secret` | `alias/ai-assistant-dev` |
+
+### DynamoDB (dev)
+
+| Table | Partition key | Billing | Purpose |
+|-------|--------------|---------|---------|
+| `ai-assistant-dev-tokens` | `provider` (String) | PAY_PER_REQUEST | Durable OAuth token storage across Lambda invocations |
 
 ---
 
@@ -342,7 +352,7 @@ All environments are in `us-east-1`. Bedrock model: `us.amazon.nova-pro-v1:0` (A
 ## Known limitations
 
 - **No custom app scheme in `app.json`**: Expo Go testing uses `exp://` scheme URIs. Standalone / production builds require `"scheme": "ai-assistant"` added to `app.json` and the corresponding `ai-assistant://` callback URL registered in Cognito.
-- **Staging and production not yet deployed**: Infrastructure config exists but no apply has run. Staging pipeline CI/CD does not exist yet (T-18).
+- **Staging not yet deployed**: Infrastructure config and CI/CD pipeline (`deploy-staging.yml`) exist. Requires GitHub `staging` environment + IAM deploy role setup before first apply. See Configuration reference for required variables.
 - **Stateless backend**: No server-side conversation history. Each `/v1/chat/plan` call is independent.
 - **Plaid in sandbox mode**: Local dev and dev environment use Plaid sandbox credentials. Production requires real Plaid credentials and Plaid's production access approval.
 - **Reminders via calendar events**: Google and Microsoft native reminder/alert APIs are not used. Reminders are created as calendar events with reminder overrides.

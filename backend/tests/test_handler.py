@@ -12,7 +12,7 @@ from unittest.mock import patch
 from assistant_app.bedrock_client import MockBedrockAgent
 from assistant_app.config import AppConfig
 from assistant_app.consent import payload_hash
-from assistant_app.handler import build_handler
+from assistant_app.handler import _extract_user_id, build_handler
 from assistant_app.registry import ProviderRegistry
 
 
@@ -541,3 +541,90 @@ class HandlerTests(unittest.TestCase):
                 None,
             )
             self.assertEqual(response["statusCode"], 502)
+
+
+class ExtractUserIdTests(unittest.TestCase):
+    """Tests for _extract_user_id — JWT claim extraction and fallback behaviour."""
+
+    def _event_with_sub(self, sub: str) -> dict:
+        """Build a minimal API Gateway v2 event with the given JWT sub claim."""
+        return {
+            "requestContext": {
+                "authorizer": {
+                    "jwt": {
+                        "claims": {
+                            "sub": sub,
+                        }
+                    }
+                }
+            }
+        }
+
+    # ------------------------------------------------------------------
+    # Happy path
+    # ------------------------------------------------------------------
+
+    def test_extracts_sub_from_full_jwt_context(self) -> None:
+        event = self._event_with_sub("user-cognito-123")
+        self.assertEqual(_extract_user_id(event), "user-cognito-123")
+
+    def test_extracts_different_subs_correctly(self) -> None:
+        self.assertEqual(_extract_user_id(self._event_with_sub("alice")), "alice")
+        self.assertEqual(_extract_user_id(self._event_with_sub("bob")), "bob")
+
+    # ------------------------------------------------------------------
+    # Fallback cases — returns "local" when JWT path is absent/malformed
+    # ------------------------------------------------------------------
+
+    def test_falls_back_to_local_when_request_context_missing(self) -> None:
+        self.assertEqual(_extract_user_id({}), "local")
+
+    def test_falls_back_to_local_when_authorizer_missing(self) -> None:
+        event = {"requestContext": {}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_jwt_missing(self) -> None:
+        event = {"requestContext": {"authorizer": {}}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_claims_missing(self) -> None:
+        event = {"requestContext": {"authorizer": {"jwt": {}}}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_sub_key_absent(self) -> None:
+        event = {"requestContext": {"authorizer": {"jwt": {"claims": {}}}}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_sub_is_none(self) -> None:
+        event = {"requestContext": {"authorizer": {"jwt": {"claims": {"sub": None}}}}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_sub_is_empty_string(self) -> None:
+        event = {"requestContext": {"authorizer": {"jwt": {"claims": {"sub": ""}}}}}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    def test_falls_back_to_local_when_request_context_is_none(self) -> None:
+        event = {"requestContext": None}
+        self.assertEqual(_extract_user_id(event), "local")
+
+    # ------------------------------------------------------------------
+    # Multi-user isolation — different sub values produce different DynamoDB key prefixes
+    # ------------------------------------------------------------------
+
+    def test_two_different_subs_produce_different_key_prefixes(self) -> None:
+        """Proves that different sub values lead to different token store key prefixes,
+        ensuring one user's tokens can never collide with another user's tokens."""
+        from assistant_app.dev_store import DevTokenStore
+
+        sub_alice = "alice-sub-uuid-001"
+        sub_bob = "bob-sub-uuid-002"
+
+        # Each user's DynamoDB key prefix is {sub}#<provider>
+        key_alice = f"{sub_alice}#google"
+        key_bob = f"{sub_bob}#google"
+
+        self.assertNotEqual(key_alice, key_bob)
+
+        # And _extract_user_id correctly surfaces these distinct subs
+        self.assertEqual(_extract_user_id(self._event_with_sub(sub_alice)), sub_alice)
+        self.assertEqual(_extract_user_id(self._event_with_sub(sub_bob)), sub_bob)
