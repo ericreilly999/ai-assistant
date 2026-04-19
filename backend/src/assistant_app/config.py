@@ -28,6 +28,18 @@ def _load_local_env(env_file: str) -> None:
             os.environ[key] = value
 
 
+def _default_store_file() -> str:
+    """Return the default token store path.
+
+    In Lambda (detected by AWS_LAMBDA_FUNCTION_NAME being set) the only
+    writable location is /tmp, so we use /tmp/dev_tokens.json.  For local
+    development we keep the project-relative path so nothing changes.
+    """
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        return "/tmp/dev_tokens.json"
+    return "backend/.local/dev_tokens.json"
+
+
 def _compute_provider_secret_status() -> dict[str, bool]:
     return {
         "google": bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET")),
@@ -93,7 +105,7 @@ class AppConfig:
             bedrock_guardrail_id=os.getenv("BEDROCK_GUARDRAIL_ID", "mock-guardrail"),
             bedrock_guardrail_version=os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT"),
             local_env_file=resolved_env_file,
-            local_store_file=os.getenv("LOCAL_STORE_FILE", "backend/.local/dev_tokens.json"),
+            local_store_file=os.getenv("LOCAL_STORE_FILE", _default_store_file()),
             google_client_id=os.getenv("GOOGLE_CLIENT_ID", ""),
             google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET", ""),
             google_redirect_uri=os.getenv(
