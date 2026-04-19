@@ -13,6 +13,28 @@ from assistant_app.registry import ProviderRegistry
 from assistant_app.response import html_response, json_response, redirect_response
 
 
+def _extract_user_id(event: dict[str, Any]) -> str:
+    """Extract the Cognito ``sub`` claim from the API Gateway v2 JWT authorizer context.
+
+    API Gateway v2 JWT authorizer populates:
+        event["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+
+    Falls back to ``"local"`` when the authorizer context is absent (local
+    development, unit tests, or unauthenticated routes such as /health).
+    """
+    try:
+        sub = (
+            (event.get("requestContext") or {})
+            .get("authorizer", {})
+            .get("jwt", {})
+            .get("claims", {})
+            .get("sub")
+        )
+        return sub or "local"
+    except (AttributeError, TypeError):
+        return "local"
+
+
 def build_handler(
     config: AppConfig | None = None,
     registry: ProviderRegistry | None = None,
@@ -20,13 +42,25 @@ def build_handler(
 ):
     active_config = config or AppConfig.from_env()
     active_registry = registry or ProviderRegistry(mock_mode=active_config.mock_provider_mode)
-    dev_service = live_service or LocalIntegrationService(active_config, active_registry)
-    orchestrator = AssistantOrchestrator(active_config, active_registry, dev_service)
+    orchestrator = AssistantOrchestrator(
+        active_config,
+        active_registry,
+        live_service or LocalIntegrationService(active_config, active_registry),
+    )
 
     def _handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         method = _resolve_method(event)
         path = _resolve_path(event)
         query = _resolve_query_params(event)
+
+        # Resolve per-request live service scoped to the authenticated user.
+        # When a live_service override is provided (tests / local dev), use it
+        # directly.  Otherwise build a fresh instance carrying the Cognito sub.
+        if live_service is not None:
+            dev_service = live_service
+        else:
+            user_id = _extract_user_id(event)
+            dev_service = LocalIntegrationService(active_config, active_registry, user_id=user_id)
 
         if method == "OPTIONS":
             return json_response(200, {"ok": True})

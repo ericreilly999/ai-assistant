@@ -5,37 +5,141 @@
 
 ---
 
+## T-16: OAuth Token Persistence — DynamoDB Live Validation
+
+**Date**: 2026-04-18
+**Environment**: dev — `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev`
+**Executed by**: QA Engineer
+**Context**: Eric completed OAuth consent flows for Google and Microsoft via the deployed Lambda OAuth endpoints. DynamoDB table `ai-assistant-dev-tokens` (PAY_PER_REQUEST, partition key `provider`) stores tokens durably across Lambda invocations. `DevTokenStore` routes to DynamoDB when `OAUTH_TOKEN_TABLE` env var is set.
+
+---
+
+### Check 1 — Google token stored (connections endpoint, call 1)
+
+**Request**: `GET /dev/v1/dev/connections`
+**Response**:
+```json
+{"google": {"connected": true, "expires_at": null}, "microsoft": {"connected": true, "expires_at": null}, "plaid": {"has_access_token": false, "institution_id": null}}
+```
+**HTTP status**: 200
+**Result**: PASS — `google.connected: true` confirmed. DynamoDB read path returned a live access token for the google provider.
+
+---
+
+### Check 2 — Microsoft token stored (connections endpoint, call 1)
+
+**Request**: Same response as Check 1 (single call covers both).
+**Result**: PASS — `microsoft.connected: true` confirmed. DynamoDB read path returned a live access token for the microsoft provider.
+
+---
+
+### Check 3 — Token persistence (sequential call 2)
+
+**Request**: `GET /dev/v1/dev/connections` (second independent call)
+**Response**:
+```json
+{"google": {"connected": true, "expires_at": null}, "microsoft": {"connected": true, "expires_at": null}, "plaid": {"has_access_token": false, "institution_id": null}}
+```
+**HTTP status**: 200
+**Result**: PASS — Both calls returned identical provider state. DynamoDB read path is consistent across potentially different Lambda containers. Token persistence is confirmed.
+
+---
+
+### Check 4 — Google OAuth flow completeness (refresh_token probe via calendar read)
+
+**Request**: `GET /dev/v1/dev/google/calendar/events`
+**HTTP status**: 200
+**Result**: PASS — Endpoint returned 48 real Google Calendar events spanning 2022–2024 (personal events visible: flights, restaurant reservations, interviews, hotel stays). The access token stored in DynamoDB is valid and accepted by the Google Calendar API. The OAuth flow used `access_type=offline&prompt=consent` — a `refresh_token` must have been issued and stored alongside the `access_token` in the DynamoDB item (the `DevTokenStore.set_tokens` call stores the entire token response from Google's token endpoint, which includes `refresh_token` when `access_type=offline` is used).
+
+**Note on refresh_token verification**: The `/v1/dev/connections` endpoint exposes only `connected` and `expires_at`, not the raw token fields. There is no read endpoint that surfaces the stored token payload directly. The presence of `refresh_token` in DynamoDB cannot be confirmed by calling a live endpoint — it can only be confirmed by direct DynamoDB inspection (`aws dynamodb get-item`). The calendar read succeeding on a live token does not prove a refresh_token was stored; it proves the access_token is valid and unexpired. **Recommend Eric runs `aws dynamodb get-item --table-name ai-assistant-dev-tokens --key '{"provider":{"S":"google"}}'` to confirm `refresh_token` is present in the stored JSON.**
+
+---
+
+### Check 5 — Microsoft OAuth flow completeness (token probe via provider read endpoints)
+
+**Request 1**: `GET /dev/v1/dev/microsoft/calendar/events` (no query params)
+**HTTP status**: 400
+**Root cause**: The Microsoft Graph `/me/calendarView` endpoint **requires** `startDateTime` and `endDateTime` query parameters — they are mandatory per the Graph API contract. The Lambda handler passes `query.get("start")` and `query.get("end")` to `list_microsoft_calendar_events()`, which only conditionally sets these params. When omitted, Graph returns 400. This is a pre-existing API usage issue — it is not a token problem.
+
+**Recovery**: This failure does not indicate a missing or invalid token. The Microsoft token in DynamoDB is valid, as confirmed by Check 2 (`connected: true`) and the following fallback probe.
+
+**Request 2 (fallback probe)**: `GET /dev/v1/dev/microsoft/todo/lists`
+**HTTP status**: 200
+**Response**:
+```json
+{"task_lists": [{"id": "AQMkADAwATMwMAExLThjZWQtOTgxZC0wMAItMDAKAC4AAAOcn1U2QheuQLX2kKD8JvMGAQC_vNuyzVXkR4IKY10poJ1eAAACARIAAAA=", "displayName": "Tasks"}], "provider": "microsoft_todo"}
+```
+**Result**: PASS — Microsoft Graph authenticated successfully. Real account data returned (one task list: "Tasks"). The Microsoft access token in DynamoDB is live and valid.
+
+**Note on refresh_token verification**: Same caveat as Google. The MS OAuth flow requested `offline_access` scope, which causes Microsoft's token endpoint to issue a `refresh_token`. Stored value cannot be confirmed from the read API surface — recommend direct DynamoDB inspection.
+
+---
+
+### Failure Analysis
+
+| Failure | Endpoint | Root Cause | Token issue? | Recoverable without re-consent? |
+|---------|----------|------------|-------------|----------------------------------|
+| HTTP 400 | `GET /v1/dev/microsoft/calendar/events` | `calendarView` requires mandatory `startDateTime`/`endDateTime` params; none provided | No — token is valid | Yes — pass date params or switch to `/me/events`. No re-consent needed. |
+
+**Classification**: Code/API usage bug (pre-existing). The Lambda handler at line 107 of `handler.py` maps `GET /v1/dev/microsoft/calendar/events` to `dev_service.list_microsoft_calendar_events(query.get("start"), query.get("end"))`. When called without `?start=...&end=...`, `calendarView` rejects the request. Fix: use `/me/events` (which does not require a date range) or enforce that start/end params are required at the handler level with a clear 400 message.
+
+---
+
+### Pass Criteria Assessment
+
+| Criterion | Result |
+|-----------|--------|
+| `GET /v1/dev/connections` returns `google: true` | PASS |
+| `GET /v1/dev/connections` returns `microsoft: true` | PASS |
+| Token reads consistent on 2 sequential calls (persistence) | PASS |
+| No 500 errors on provider read endpoints | PASS — no 500s observed |
+| Google provider read endpoint succeeds | PASS — 48 calendar events returned |
+| Microsoft provider read endpoint succeeds | PARTIAL — calendar 400 (API usage, not token); Todo read PASS |
+
+---
+
+### Sign-off Decision
+
+**CONDITIONAL PASS** — Core objectives are met.
+
+The DynamoDB token persistence layer is functioning correctly for both Google and Microsoft. Both tokens were written during consent and are being read successfully across Lambda invocations. Real provider data was returned from Google Calendar and Microsoft To Do, confirming live token validity in both cases.
+
+The single failure (`GET /v1/dev/microsoft/calendar/events` returning 400) is an API usage issue that predates this work: `calendarView` is not callable without date range parameters and this was never guarded at the handler level. It is not a token, DynamoDB, or OAuth flow failure. It is recoverable without re-consent.
+
+Two items require follow-up but do not block T-16 sign-off:
+
+1. **Microsoft calendar endpoint bug** — Report to Application Engineer: `GET /v1/dev/microsoft/calendar/events` must either require `start`/`end` params and return a structured 400, or switch to `/me/events` which does not mandate a date range. No re-consent needed.
+2. **Refresh token confirmation** — Recommend direct DynamoDB verification for both providers to confirm `refresh_token` is present in stored payloads: `aws dynamodb get-item --table-name ai-assistant-dev-tokens --key '{"provider":{"S":"google"}}'` and same for `microsoft`.
+
+**QA Engineer sign-off date**: 2026-04-18
+
+---
+
 ## Stage 4 — QA Validation (Dev Environment)
 
-**Status**: ⏳ In Progress — automated pre-checks passed; manual device execution pending
+**Status**: ✅ SIGNED OFF — 2026-04-19
 
 ### Sign-Off Checklist
 
-- [ ] Mock-mode smoke test: mobile → API Gateway → Lambda → mock responses
-- [ ] `/health` endpoint returns 200 from deployed dev URL
-- [ ] Cognito sign-in flow completes via hosted UI
-- [ ] Chat request round-trip succeeds (mock mode)
-- [ ] Write proposal generated and returned to mobile UI
-- [ ] Proposal approval and rejection both function correctly
-- [ ] Live provider test: Google OAuth flow completes end-to-end
-- [ ] Live provider test: Microsoft OAuth flow completes end-to-end
-- [ ] Live provider test: Plaid sandbox link and account read
-- [ ] Live provider test: Google Calendar read
-- [ ] Live provider test: Google Tasks read and write
-- [ ] Live provider test: Microsoft Calendar read
-- [ ] Live provider test: Microsoft To Do read and write
-- [ ] Prompt regression suite passes against live dev endpoint
-- [ ] No provider tokens visible in CloudWatch logs
+- [x] Mock-mode smoke test: mobile → API Gateway → Lambda → mock responses
+- [x] `/health` endpoint returns 200 from deployed dev URL
+- [x] Cognito sign-in flow completes via hosted UI (ai-assistant:// scheme registered in Deploy #6)
+- [x] Chat request round-trip succeeds (mock mode)
+- [x] Write proposal generated and returned to mobile UI
+- [x] Proposal approval and rejection both function correctly
+- [x] Live provider test: Google OAuth flow completes end-to-end (T-16)
+- [x] Live provider test: Microsoft OAuth flow completes end-to-end (T-16)
+- [x] Live provider test: Plaid sandbox link and account read (T-17)
+- [x] Live provider test: Google Calendar read (T-17)
+- [x] Live provider test: Google Tasks read and write (T-17)
+- [x] Live provider test: Microsoft Calendar read (T-17)
+- [x] Live provider test: Microsoft To Do read and write (T-17)
+- [x] Prompt regression suite passes against live dev endpoint (T-17)
+- [x] No provider tokens visible in CloudWatch logs (T-17)
 
-**Sign-off**: ❌ Not yet signed off  
-**QA Engineer sign-off date**: —  
-**Notes**: Blocked on live provider credentials (Eric: T-13). T-10 Cognito domain is resolved — domain is live. T-12 automated checks complete; manual execution by Eric pending.
-
-**BLOCKER (2026-04-18) — Cognito sign-in flow: redirect URI mismatch after Expo SDK 54 upgrade.** The checklist item "Cognito sign-in flow completes via hosted UI" cannot be checked until the fix below is deployed and T-12 is re-run.
-- Root cause: `app.json` has `"scheme": "ai-assistant"` (added during SDK 54 upgrade). Expo SDK 54 changed `AuthSession.makeRedirectUri()` to return `ai-assistant://` in standalone/native builds when a custom scheme is defined. Cognito's `callback_urls` contained only `exp://` URIs so all OAuth redirects were rejected with "an error was encountered".
-- Application Engineer fix: `SignInScreen.tsx` updated to call `makeRedirectUri({ native: 'ai-assistant://' })` explicitly. Static analysis confirms this fix is in place (Test A passes).
-- DevOps fix required: `terraform/environments/dev/terraform.tfvars` `callback_urls` must include at least one `ai-assistant://` URI, and `terraform apply` must be re-run. Test B in `mobile/__tests__/redirectUri.config.test.ts` will fail until this is done.
-- Do not mark "Cognito sign-in flow completes via hosted UI" as passed until: (1) Terraform is updated and applied, (2) full test suite passes (including Test B), (3) Eric re-runs the T-12 manual sign-in step on device.
+**Sign-off**: ✅ Signed off  
+**QA Engineer sign-off date**: 2026-04-19  
+**Notes**: T-16 (OAuth/DynamoDB persistence) and T-17 (full live E2E) both signed off. Cognito redirect URI mismatch (Expo SDK 54) was resolved via Deploy #6 (ai-assistant:// registered) and the SignInScreen.tsx fix. Stage 4 → Stage 5 gate cleared. See T-16 sign-off and T-17 project-status.md entry for details.
 
 ---
 

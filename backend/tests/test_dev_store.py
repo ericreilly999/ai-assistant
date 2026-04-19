@@ -116,60 +116,67 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
 
     def test_get_tokens_returns_none_when_item_missing(self) -> None:
         self._table.get_item.return_value = {}
-        self.assertIsNone(self._store.get_tokens("google"))
-        self._table.get_item.assert_called_once_with(Key={"provider": "google"})
+        self.assertIsNone(self._store.get_tokens("google", user_id="user-abc"))
+        # Partition key must be the composite {user_id}#{provider} value
+        self._table.get_item.assert_called_once_with(Key={"provider": "user-abc#google"})
 
     def test_get_tokens_returns_dict_when_item_exists(self) -> None:
         tokens = {"access_token": "ddb-tok", "expires_in": 3600}
-        self._table.get_item.return_value = {"Item": {"provider": "google", "tokens": json.dumps(tokens)}}
-        result = self._store.get_tokens("google")
+        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(tokens)}}
+        result = self._store.get_tokens("google", user_id="user-abc")
         self.assertEqual(result, tokens)
+
+    def test_get_tokens_default_user_id_is_local(self) -> None:
+        """When user_id is omitted the key falls back to 'local#<provider>'."""
+        self._table.get_item.return_value = {}
+        self._store.get_tokens("google")
+        self._table.get_item.assert_called_once_with(Key={"provider": "local#google"})
 
     # ------------------------------------------------------------------ set_tokens
 
     def test_set_tokens_calls_put_item_with_json_serialised_tokens(self) -> None:
         tokens = {"access_token": "new-tok"}
-        self._store.set_tokens("microsoft", tokens)
+        self._store.set_tokens("microsoft", tokens, user_id="user-abc")
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "microsoft", "tokens": json.dumps(tokens)}
+            Item={"provider": "user-abc#microsoft", "tokens": json.dumps(tokens)}
         )
 
     # ------------------------------------------------------------------ clear_tokens
 
     def test_clear_tokens_calls_delete_item(self) -> None:
-        self._store.clear_tokens("google")
-        self._table.delete_item.assert_called_once_with(Key={"provider": "google"})
+        self._store.clear_tokens("google", user_id="user-abc")
+        self._table.delete_item.assert_called_once_with(Key={"provider": "user-abc#google"})
 
     # ------------------------------------------------------------------ merge_tokens
 
     def test_merge_tokens_merges_into_existing_tokens(self) -> None:
         existing = {"access_token": "old-tok", "scope": "email"}
-        self._table.get_item.return_value = {"Item": {"provider": "google", "tokens": json.dumps(existing)}}
-        self._store.merge_tokens("google", {"access_token": "new-tok"})
+        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(existing)}}
+        self._store.merge_tokens("google", {"access_token": "new-tok"}, user_id="user-abc")
         expected = {"access_token": "new-tok", "scope": "email"}
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "google", "tokens": json.dumps(expected)}
+            Item={"provider": "user-abc#google", "tokens": json.dumps(expected)}
         )
 
     def test_merge_tokens_creates_provider_if_absent(self) -> None:
         self._table.get_item.return_value = {}
-        self._store.merge_tokens("microsoft", {"access_token": "ms-tok"})
+        self._store.merge_tokens("microsoft", {"access_token": "ms-tok"}, user_id="user-abc")
         self._table.put_item.assert_called_once_with(
-            Item={"provider": "microsoft", "tokens": json.dumps({"access_token": "ms-tok"})}
+            Item={"provider": "user-abc#microsoft", "tokens": json.dumps({"access_token": "ms-tok"})}
         )
 
     # ------------------------------------------------------------------ plaid_status
 
     def test_plaid_status_no_token(self) -> None:
         self._table.get_item.return_value = {}
-        status = self._store.plaid_status()
+        status = self._store.plaid_status(user_id="user-abc")
         self.assertFalse(status["has_access_token"])
         self.assertIsNone(status["institution_id"])
 
     def test_plaid_status_with_token(self) -> None:
         plaid_tokens = {"access_token": "plaid-tok", "institution_id": "ins_123"}
-        self._table.get_item.return_value = {"Item": {"provider": "plaid", "tokens": json.dumps(plaid_tokens)}}
-        status = self._store.plaid_status()
+        self._table.get_item.return_value = {"Item": {"provider": "user-abc#plaid", "tokens": json.dumps(plaid_tokens)}}
+        status = self._store.plaid_status(user_id="user-abc")
         self.assertTrue(status["has_access_token"])
         self.assertEqual(status["institution_id"], "ins_123")
 
@@ -177,12 +184,12 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
 
     def test_expires_at_returns_none_when_no_tokens(self) -> None:
         self._table.get_item.return_value = {}
-        self.assertIsNone(self._store.expires_at("google"))
+        self.assertIsNone(self._store.expires_at("google", user_id="user-abc"))
 
     def test_expires_at_returns_value_when_set(self) -> None:
         tokens = {"access_token": "tok", "expires_at": "2026-01-01T00:00:00+00:00"}
-        self._table.get_item.return_value = {"Item": {"provider": "google", "tokens": json.dumps(tokens)}}
-        self.assertEqual(self._store.expires_at("google"), "2026-01-01T00:00:00+00:00")
+        self._table.get_item.return_value = {"Item": {"provider": "user-abc#google", "tokens": json.dumps(tokens)}}
+        self.assertEqual(self._store.expires_at("google", user_id="user-abc"), "2026-01-01T00:00:00+00:00")
 
     # ------------------------------------------------------------------ dispatch check
 

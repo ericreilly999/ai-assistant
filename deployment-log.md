@@ -194,7 +194,7 @@
 ## Staging Environment
 
 **Status**: ❌ Not yet deployed  
-**Blocked on**: Dev Stage 4 QA sign-off
+**Blocked on**: Eric creating staging IAM deploy role (AWS) + `staging` GitHub environment — see workflow-state.md for exact steps
 
 ---
 

@@ -134,3 +134,180 @@ test_thinking_tags_are_stripped                         PASSED
 ```
 
 **Sign-off decision**: PASS — attribute-bearing tag gap identified by SRE is closed. Regex now handles `<thinking>`, `<thinking type="...">`, `<THINKING>`, and all `<answer>` variants.
+
+---
+
+## T-17 — Stage 4 Full Live End-to-End Validation
+
+**Date**: 2026-04-18
+**Environment**: dev — `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev`
+**Version / Commit**: HEAD of main (post-PR #19 merge)
+**Validated by**: QA Engineer
+**Test cycle**: Stage 4 sign-off
+
+---
+
+### 1. Unit Test Suite
+
+**Command**: `PYTHONPATH=src python -m pytest tests -v --tb=short` (from `backend/`)
+**Python**: 3.12.10, pytest 9.0.3
+
+| Result | Count |
+|--------|-------|
+| Passed | 424 |
+| Failed | 0 |
+| Errors | 0 |
+| Subtests passed | 66 |
+
+**Verdict**: PASS — 424/424. Zero failures.
+
+---
+
+### 2. Live Provider Read Checks
+
+All requests made against `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com`.
+
+#### GET /dev/health
+
+| Check | Result |
+|-------|--------|
+| HTTP status | 200 |
+| `mock_provider_mode` | `false` |
+| `provider_secret_status.google` | `true` |
+| `provider_secret_status.microsoft` | `true` |
+| `provider_secret_status.plaid` | `true` |
+| All 3 provider secrets loaded | PASS |
+
+**Verdict**: PASS
+
+#### GET /dev/v1/dev/connections
+
+Response: `{"google": {"connected": true, "expires_at": null}, "microsoft": {"connected": true, "expires_at": null}, "plaid": {"has_access_token": true, "institution_id": "ins_109508"}}`
+
+| Check | Result |
+|-------|--------|
+| HTTP status | 200 |
+| `google.connected` | `true` |
+| `microsoft.connected` | `true` |
+| `plaid.has_access_token` | `true` (after bootstrap) |
+
+**Verdict**: PASS
+
+#### GET /dev/v1/dev/google/calendar/events
+
+| Check | Result |
+|-------|--------|
+| HTTP status | 200 |
+| Real events returned | Yes — multiple live events with ids, titles, start/end timestamps, sources |
+| `source` field | `"google_calendar"` |
+
+**Verdict**: PASS — live Google Calendar data confirmed
+
+#### GET /dev/v1/dev/google/tasks/lists
+
+| Check | Result |
+|-------|--------|
+| HTTP status | 200 |
+| Task lists returned | Yes — `[{"id": "MTgwMjg3...", "title": "My Tasks"}]` |
+| `provider` field | `"google_tasks"` |
+
+**Verdict**: PASS
+
+#### GET /dev/v1/dev/microsoft/todo/lists
+
+| Check | Result |
+|-------|--------|
+| HTTP status | 200 |
+| Task lists returned | Yes — `[{"id": "AQMkAD...", "displayName": "Tasks"}]` |
+| `provider` field | `"microsoft_todo"` |
+
+**Verdict**: PASS — live Microsoft Todo data confirmed
+
+#### GET /dev/v1/dev/plaid/accounts
+
+Plaid bootstrap required. `POST /dev/v1/dev/plaid/sandbox/bootstrap` executed first — returned `{"institution_id": "ins_109508", "access_token_stored": true}` (HTTP 200).
+
+| Check | Result |
+|-------|--------|
+| Bootstrap HTTP status | 200 |
+| Accounts HTTP status | 200 |
+| Accounts returned | 12 sandbox accounts (Checking, Saving, CD, Credit Card, Money Market, IRA, 401k, Student Loan, Mortgage, HSA, Cash Management, Business Credit Card) |
+| `provider` field | `"plaid"` |
+
+**Verdict**: PASS — Plaid sandbox accounts returned after bootstrap
+
+---
+
+### 3. Chat Intent Routing (POST /dev/v1/chat/plan)
+
+**Status: BLOCKED — requires Cognito JWT**
+
+Cognito user pool `us-east-1_fo4459oxO` (`ai-assistant-dev-users`) was inspected. The pool contains one user only (`ericreilly999@gmail.com`) — the developer's personal account. No CI service account exists. The mobile client (`ai-assistant-dev-mobile`, client ID `4dqle0d1u53tudl6lg7rfmbbgp`) supports `ALLOW_USER_PASSWORD_AUTH` but no programmatic credentials are available to QA.
+
+**Action required**: Provision a CI Cognito service account (username + password in a CI secret) to enable automated chat layer validation. This was noted as an open item in the P1 incident report.
+
+This block is consistent with the finding documented in the P1 incident entry above — chat smoke test blocked pending a CI service account.
+
+---
+
+### 4. Regression Checks
+
+| Check | Result |
+|-------|--------|
+| `GET /dev/health` response contains no `<thinking>` tags | PASS |
+| Microsoft calendar 400 error response is structured JSON (not bare string) | PASS — `{"message": "HTTP Error 400: Bad Request", "provider_response": "{...}"}` |
+| `GET /dev/nonexistent` returns structured JSON 404 (not bare "Not Found") | PASS — `{"message": "No route for GET /nonexistent"}`, HTTP 404 |
+
+---
+
+### 5. Known Defect (Pre-existing — Tracked Separately)
+
+**`GET /dev/v1/dev/microsoft/calendar/events`** returns HTTP 400 when `start`/`end` query params are absent.
+
+Response: `{"message": "HTTP Error 400: Bad Request", "provider_response": "{\"error\":{\"code\":\"ErrorInvalidParameter\",\"message\":\"This request requires a time window specified by the query string parameters StartDateTime and EndDateTime.\"}}"}`
+
+This is the Microsoft Graph calendarView defect confirmed in T-16 and noted in the T-17 scope. A separate App Engineer fix is in flight. The error response is structured JSON (not a bare string), satisfying the regression requirement. **This defect does not block Stage 4 sign-off** per the agreed pass criteria.
+
+---
+
+### Summary
+
+| Area | Tests | Pass | Fail | Blocked |
+|------|-------|------|------|---------|
+| Unit suite | 424 | 424 | 0 | 0 |
+| Health check | 1 | 1 | 0 | 0 |
+| Connections check | 1 | 1 | 0 | 0 |
+| Google Calendar events | 1 | 1 | 0 | 0 |
+| Google Tasks lists | 1 | 1 | 0 | 0 |
+| Microsoft Todo lists | 1 | 1 | 0 | 0 |
+| Plaid accounts (sandbox) | 1 | 1 | 0 | 0 |
+| Chat intent routing | 2 | 0 | 0 | 2 |
+| Regression: thinking-tag leakage | 1 | 1 | 0 | 0 |
+| Regression: structured error JSON | 1 | 1 | 0 | 0 |
+| Regression: structured 404 | 1 | 1 | 0 | 0 |
+| **Total** | **435** | **433** | **0** | **2** |
+
+**Known defect on record (not counted as fail)**: Microsoft calendar `calendarView` 400 — separate fix in flight.
+
+---
+
+### Stage 4 Sign-off Decision
+
+**PASS**
+
+All pass criteria met:
+- Unit tests: 424/424 pass, 0 fail
+- Health: all 3 provider secrets loaded, `mock_provider_mode: false`
+- Google Calendar: live events returned
+- Google Tasks: live task lists returned
+- Microsoft Todo: live task lists returned
+- Plaid: 12 sandbox accounts returned after bootstrap
+- Structured 404 confirmed — `{"message": "No route for GET /nonexistent"}`
+- No `<thinking>` tag leakage in health response
+- Provider errors return structured JSON
+
+Blocked items (2 chat tests) are blocked solely due to absence of a CI Cognito service account — this is a pre-existing infrastructure gap, not a code regression. These tests were blocked in T-16 under the same condition and are tracked in the open items from the P1 incident.
+
+**Stage 4 QA sign-off: GRANTED.**
+
+Project Manager: ready to proceed to Stage 5.

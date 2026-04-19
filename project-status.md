@@ -4,40 +4,59 @@
 
 ## Summary
 
-Stage 4 (QA Validation on Dev) is in progress. T-12 signed off. T-16 (provider OAuth flows) was blocked by 4 engineering issues — all fixed and merged. CI/CD deploy is in flight (PRs #21/#22 pushed to main). Once deploy settles, T-16 can complete pending Eric adding redirect URIs in Google Cloud Console and Microsoft Entra.
+Stage 4 QA (dev) is signed off. T-18 complete — staging CI/CD pipeline merged (PR #29). Param guard fixes merged (PRs #27, #28). A backend.hcl gitignore cleanup is in flight. **Eric's action required before T-19 (first staging deploy) can run** — see below.
 
 ## What We Just Completed
 
-- 2026-04-19 — T-12 signed off by Eric: sign-in, chat (no thinking tags), proposal card rendered, sign-out ✅
-- 2026-04-19 — PR #22 merged: DevTokenStore uses `/tmp` in Lambda (`AWS_LAMBDA_FUNCTION_NAME` detection)
-- 2026-04-19 — PR #21 merged: 4 OAuth routes added to API Gateway; `GOOGLE_REDIRECT_URI` + `MICROSOFT_REDIRECT_URI` Lambda env vars set
-- 2026-04-19 — PR #20 merged: `deploy-dev.yml` pip fix (`backend[test]`) + post-deploy SHA verification
-- 2026-04-19 — PR #19 merged: thinking-tag regex hardened (`\b[^>]*` + `re.IGNORECASE`)
-- 2026-04-19 — Lambda redeployed with all Phase 13 + thinking-tag + rebrand code (was stranded since 2026-04-08)
+- 2026-04-19 — **T-18 COMPLETE** — staging CI/CD pipeline merged (PR #29, `deploy-staging.yml`) ✅
+- 2026-04-19 — PR #28 merged: param guards for Google Calendar + Plaid transactions dev routes
+- 2026-04-19 — PR #27 merged: param guard for Microsoft calendar dev route
+- 2026-04-19 — **T-17 SIGNED OFF** — Stage 4 QA complete ✅
+- 2026-04-19 — T-16 SIGNED OFF — OAuth tokens stored in DynamoDB, providers connected ✅
+- 2026-04-19 — PRs #23–26 merged: DynamoDB token store (infra + impl), Checkov cleanup, lint fix
 
 ## What's In Progress
 
-- CI/CD deploy triggered by PRs #21/#22 merge — OAuth routes + token store fix landing via `terraform apply`
+- DevOps: backend.hcl gitignore cleanup PR (in progress)
 
-## What's Coming Next
+## What's Coming Next — Human Actions Required Before T-19
 
-1. **Eric (human action)** — Add redirect URIs in consoles (if not done yet):
-   - Google Cloud Console: `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/google/callback`
-   - Microsoft Entra: `https://lbg6dypkqi.execute-api.us-east-1.amazonaws.com/dev/oauth/microsoft/callback`
-2. **QA Engineer** — T-16: Re-run provider OAuth flows (Google + Microsoft) once deploy settles
-3. **QA Engineer** — T-17: Full live end-to-end test + Stage 4 sign-off
-4. **DevOps Engineer** — Checkov cleanup PR (pre-existing findings — required before staging)
-5. **DevOps Engineer** — T-18: Staging CI/CD pipeline (after Stage 4 sign-off)
+⚠️ Before the first staging deploy can run, Eric needs to complete:
+
+**In AWS:**
+1. Create a staging IAM deploy role trusted for GitHub Actions OIDC, scoped to `repo:ericreilly999/ai-assistant:environment:staging`
+   - Same permissions pattern as `ai-assistant-github-actions-deploy` (dev role)
+   - Role name suggestion: `ai-assistant-github-actions-deploy-staging`
+
+**In GitHub (repo Settings → Environments → New environment "staging"):**
+2. Create GitHub environment `staging` with:
+
+| Name | Type | Value |
+|------|------|-------|
+| `AWS_DEPLOY_ROLE_ARN` | Secret | ARN of new staging IAM role |
+| `TF_BACKEND_BUCKET` | Secret | `ericreilly999-ai-assistant-tfstate` |
+| `AWS_REGION` | Variable | `us-east-1` |
+| `MOCK_PROVIDER_MODE` | Variable | `false` |
+| `TF_CORS_ORIGINS` | Variable | (staging domain or `"*"` for now) |
+| `TF_CALLBACK_URLS` | Variable | Cognito staging callback URL |
+| `TF_LOGOUT_URLS` | Variable | Cognito staging logout URL |
+| `TF_BEDROCK_MODEL_ID` | Variable | `us.amazon.nova-pro-v1:0` |
+| `TF_COGNITO_DOMAIN` | Variable | `ai-assistant-staging` (must be globally unique) |
+
+**After first terraform apply:**
+3. Write real OAuth credentials into staging Secrets Manager secrets (Google, Microsoft, Plaid)
+
+Once items 1–2 are done, trigger the staging deploy via GitHub Actions → deploy-staging → Run workflow.
 
 ## Blockers
 
-None — engineering fixes merged, waiting on deploy + Eric's console actions.
+Waiting on Eric's staging setup actions (listed above) before T-19 can proceed.
 
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Eric hasn't yet added redirect URIs in Google/Microsoft consoles | M | H | Surfaced directly — see "What's Coming Next" item 1 |
-| Checkov findings (CKV_AWS_356, CKV_AWS_309 + 10 others) — terraform-validate failing in CI | M | M | DevOps cleanup PR before staging promotion |
-| `AppConfig` dataclass field default inconsistent with `_default_store_file()` — direct construction bypasses Lambda detection | L | L | Follow-on chore: `field(default_factory=_default_store_file)` |
-| Staging AWS infrastructure does not yet exist | L | M | T-18 covers this; not needed until Stage 4 sign-off |
+| `ai-assistant-staging` Cognito domain prefix taken globally | L | L | Try it — if taken, choose alternate prefix and update `TF_COGNITO_DOMAIN` |
+| Staging Secrets Manager populated with wrong/empty credentials | M | H | Must write real creds post-apply before OAuth flows work in staging |
+| Chat intent tests unverifiable without CI Cognito account | M | M | Manual test via Eric; CI account tracked as T-27 |
+| DynamoDB root-level resource → extract to module | L | L | Pre-staging tech debt — acceptable, tracked |

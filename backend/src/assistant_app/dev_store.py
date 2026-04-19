@@ -49,45 +49,59 @@ class DevTokenStore:
     # Public interface — works in both file and DynamoDB modes
     # ------------------------------------------------------------------
 
-    def get_tokens(self, provider: str) -> dict[str, Any] | None:
+    def _ddb_key(self, user_id: str, provider: str) -> str:
+        """Return the DynamoDB partition key value scoped to a specific user.
+
+        Format: ``{user_id}#{provider}``
+
+        Using a composite value rather than a separate sort key keeps the table
+        schema (single string hash_key ``provider``) unchanged while ensuring
+        that one user's OAuth tokens can never overwrite another user's record.
+        """
+        return f"{user_id}#{provider}"
+
+    def get_tokens(self, provider: str, user_id: str = "local") -> dict[str, Any] | None:
         if self._table is not None:
-            response = self._table.get_item(Key={"provider": provider})
+            key = self._ddb_key(user_id, provider)
+            response = self._table.get_item(Key={"provider": key})
             item = response.get("Item")
             if item is None:
                 return None
             return json.loads(item["tokens"])
         return self.load().get(provider)
 
-    def set_tokens(self, provider: str, tokens: dict[str, Any]) -> None:
+    def set_tokens(self, provider: str, tokens: dict[str, Any], user_id: str = "local") -> None:
         if self._table is not None:
-            self._table.put_item(Item={"provider": provider, "tokens": json.dumps(tokens)})
+            key = self._ddb_key(user_id, provider)
+            self._table.put_item(Item={"provider": key, "tokens": json.dumps(tokens)})
             return
         data = self.load()
         data[provider] = tokens
         self.save(data)
 
-    def clear_tokens(self, provider: str) -> None:
+    def clear_tokens(self, provider: str, user_id: str = "local") -> None:
         if self._table is not None:
-            self._table.delete_item(Key={"provider": provider})
+            key = self._ddb_key(user_id, provider)
+            self._table.delete_item(Key={"provider": key})
             return
         data = self.load()
         data.pop(provider, None)
         self.save(data)
 
-    def merge_tokens(self, provider: str, updates: dict[str, Any]) -> None:
-        existing = self.get_tokens(provider) or {}
+    def merge_tokens(self, provider: str, updates: dict[str, Any], user_id: str = "local") -> None:
+        existing = self.get_tokens(provider, user_id=user_id) or {}
         existing.update(updates)
-        self.set_tokens(provider, existing)
+        self.set_tokens(provider, existing, user_id=user_id)
 
-    def plaid_status(self) -> dict[str, Any]:
-        plaid = self.get_tokens("plaid") or {}
+    def plaid_status(self, user_id: str = "local") -> dict[str, Any]:
+        plaid = self.get_tokens("plaid", user_id=user_id) or {}
         return {
             "has_access_token": bool(plaid.get("access_token")),
             "institution_id": plaid.get("institution_id"),
         }
 
-    def expires_at(self, provider: str) -> str | None:
-        tokens = self.get_tokens(provider)
+    def expires_at(self, provider: str, user_id: str = "local") -> str | None:
+        tokens = self.get_tokens(provider, user_id=user_id)
         if tokens is None:
             return None
         return tokens.get("expires_at")

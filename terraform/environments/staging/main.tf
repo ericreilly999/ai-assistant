@@ -48,6 +48,13 @@ module "bedrock" {
   tags        = local.tags
 }
 
+module "token_store" {
+  source      = "../../modules/oauth_token_store"
+  name_prefix = local.name_prefix
+  kms_key_arn = module.kms.key_arn
+  tags        = local.tags
+}
+
 data "aws_iam_policy_document" "lambda_runtime" {
   # CKV_AWS_356: scope Bedrock actions to foundation-model and guardrail ARNs in this
   # account/region rather than using a bare "*". Cross-region inference profile ARNs
@@ -86,7 +93,7 @@ data "aws_iam_policy_document" "lambda_runtime" {
       "dynamodb:PutItem",
       "dynamodb:DeleteItem",
     ]
-    resources = [aws_dynamodb_table.oauth_tokens.arn]
+    resources = [module.token_store.table_arn]
   }
 }
 
@@ -117,7 +124,7 @@ module "lambda" {
     CORS_ALLOWED_ORIGINS       = join(",", var.cors_allow_origins)
     GOOGLE_REDIRECT_URI        = "https://${module.api.api_id}.execute-api.${var.aws_region}.amazonaws.com/staging/oauth/google/callback"
     MICROSOFT_REDIRECT_URI     = "https://${module.api.api_id}.execute-api.${var.aws_region}.amazonaws.com/staging/oauth/microsoft/callback"
-    OAUTH_TOKEN_TABLE          = aws_dynamodb_table.oauth_tokens.name
+    OAUTH_TOKEN_TABLE          = module.token_store.table_name
   }
   tags = local.tags
 }

@@ -51,9 +51,13 @@ _MS_SCOPES = " ".join([
 class LocalIntegrationService:
     """Handles OAuth flows and live provider API calls during local development."""
 
-    def __init__(self, config: AppConfig, registry: ProviderRegistry) -> None:
+    def __init__(self, config: AppConfig, registry: ProviderRegistry, user_id: str = "local") -> None:
         self.config = config
         self.registry = registry
+        # user_id scopes all DynamoDB token records to a specific Cognito user
+        # (the ``sub`` claim from the Cognito JWT).  Falls back to "local" for
+        # file-backed development where no Cognito identity is present.
+        self._user_id = user_id
         self._store = DevTokenStore(config.local_store_file)
 
     # -------------------------------------------------------------------------
@@ -61,17 +65,17 @@ class LocalIntegrationService:
     # -------------------------------------------------------------------------
 
     def connection_status(self) -> dict[str, Any]:
-        google_tokens = self._store.get_tokens("google")
-        ms_tokens = self._store.get_tokens("microsoft")
-        plaid_info = self._store.plaid_status()
+        google_tokens = self._store.get_tokens("google", user_id=self._user_id)
+        ms_tokens = self._store.get_tokens("microsoft", user_id=self._user_id)
+        plaid_info = self._store.plaid_status(user_id=self._user_id)
         return {
             "google": {
                 "connected": bool(google_tokens and google_tokens.get("access_token")),
-                "expires_at": self._store.expires_at("google"),
+                "expires_at": self._store.expires_at("google", user_id=self._user_id),
             },
             "microsoft": {
                 "connected": bool(ms_tokens and ms_tokens.get("access_token")),
-                "expires_at": self._store.expires_at("microsoft"),
+                "expires_at": self._store.expires_at("microsoft", user_id=self._user_id),
             },
             "plaid": plaid_info,
         }
@@ -84,7 +88,7 @@ class LocalIntegrationService:
         if not self.config.google_client_id:
             raise ValueError("GOOGLE_CLIENT_ID is not configured.")
         state = secrets.token_urlsafe(16)
-        self._store.merge_tokens("google_oauth_state", {"state": state})
+        self._store.merge_tokens("google_oauth_state", {"state": state}, user_id=self._user_id)
         params = {
             "client_id": self.config.google_client_id,
             "redirect_uri": self.config.google_redirect_uri,
@@ -110,11 +114,11 @@ class LocalIntegrationService:
             },
         )
         tokens["stored_at"] = datetime.now(timezone.utc).isoformat()
-        self._store.set_tokens("google", tokens)
+        self._store.set_tokens("google", tokens, user_id=self._user_id)
         return {"provider": "google", "stored": True, "scope": tokens.get("scope", "")}
 
     def _google_token(self) -> str:
-        tokens = self._store.get_tokens("google") or {}
+        tokens = self._store.get_tokens("google", user_id=self._user_id) or {}
         access_token = tokens.get("access_token", "")
         if not access_token:
             raise ValueError("Google is not connected. Run the OAuth flow first.")
@@ -131,7 +135,7 @@ class LocalIntegrationService:
         if not self.config.microsoft_client_id:
             raise ValueError("MICROSOFT_CLIENT_ID is not configured.")
         state = secrets.token_urlsafe(16)
-        self._store.merge_tokens("microsoft_oauth_state", {"state": state})
+        self._store.merge_tokens("microsoft_oauth_state", {"state": state}, user_id=self._user_id)
         params = {
             "client_id": self.config.microsoft_client_id,
             "redirect_uri": self.config.microsoft_redirect_uri,
@@ -156,11 +160,11 @@ class LocalIntegrationService:
             },
         )
         tokens["stored_at"] = datetime.now(timezone.utc).isoformat()
-        self._store.set_tokens("microsoft", tokens)
+        self._store.set_tokens("microsoft", tokens, user_id=self._user_id)
         return {"provider": "microsoft", "stored": True, "scope": tokens.get("scope", "")}
 
     def _ms_token(self) -> str:
-        tokens = self._store.get_tokens("microsoft") or {}
+        tokens = self._store.get_tokens("microsoft", user_id=self._user_id) or {}
         access_token = tokens.get("access_token", "")
         if not access_token:
             raise ValueError("Microsoft is not connected. Run the OAuth flow first.")
@@ -345,7 +349,7 @@ class LocalIntegrationService:
             "access_token": access_token,
             "institution_id": institution_id,
             "stored_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }, user_id=self._user_id)
         return {"institution_id": institution_id, "access_token_stored": True}
 
     def list_plaid_accounts(self) -> dict[str, Any]:
@@ -385,7 +389,7 @@ class LocalIntegrationService:
         }
 
     def _plaid_access_token(self) -> str:
-        tokens = self._store.get_tokens("plaid") or {}
+        tokens = self._store.get_tokens("plaid", user_id=self._user_id) or {}
         access_token = tokens.get("access_token", "")
         if not access_token:
             raise ValueError("Plaid is not connected. Run the sandbox bootstrap first.")

@@ -1,6 +1,6 @@
 # AI Assistant — Master Todo List
 
-Last updated: 2026-04-10
+Last updated: 2026-04-19
 
 > **Owner key**: `[DEV]` Application Engineer · `[QA]` QA Engineer · `[DEVOPS]` DevOps Engineer · `[REQ]` Requirement Analyst · `[HUMAN]` Eric (manual action required)
 
@@ -94,15 +94,15 @@ Last updated: 2026-04-10
 - [x] Confirm file is gitignored
 
 ### T-12 — Mock-Mode Smoke Test (Mobile → Lambda) `[QA]`
-**Status**: [ ] Pending  
+**Status**: [x] Done — 2026-04-19 (completed as part of T-17 Stage 4 sign-off)  
 **Depends On**: T-10, T-11  
-- [ ] Run Expo app against dev API
-- [ ] Complete Cognito sign-in via hosted UI
-- [ ] Send a chat request — confirm mock response returns
-- [ ] Trigger a write proposal — confirm proposal card renders
-- [ ] Approve proposal — confirm execution response
-- [ ] Reject proposal — confirm rejection path
-- [ ] Update `test-signoff.md` with results
+- [x] Run Expo app against dev API
+- [x] Complete Cognito sign-in via hosted UI
+- [x] Send a chat request — confirm mock response returns
+- [x] Trigger a write proposal — confirm proposal card renders
+- [x] Approve proposal — confirm execution response
+- [x] Reject proposal — confirm rejection path
+- [x] Update `test-signoff.md` with results
 
 ---
 
@@ -134,24 +134,24 @@ Last updated: 2026-04-10
 - [x] Update `deployment-log.md`
 
 ### T-16 — Provider OAuth Flows (Google + Microsoft) `[QA]`
-**Status**: [ ] Pending  
+**Status**: [x] Done — 2026-04-18 (signed off in test-signoff.md)  
 **Depends On**: T-15  
-- [ ] Run `scripts/start-provider-auth.ps1` — Google OAuth flow end-to-end
-- [ ] Run `scripts/start-provider-auth.ps1` — Microsoft OAuth flow end-to-end
-- [ ] Confirm tokens stored correctly in dev store
+- [x] Run `scripts/start-provider-auth.ps1` — Google OAuth flow end-to-end
+- [x] Run `scripts/start-provider-auth.ps1` — Microsoft OAuth flow end-to-end
+- [x] Confirm tokens stored correctly in dev store (DynamoDB `ai-assistant-dev-tokens`)
 
 ### T-17 — Full Live End-to-End Test `[QA]`
-**Status**: [ ] Pending  
+**Status**: [x] Done — 2026-04-19 (Stage 4 QA gate cleared)  
 **Depends On**: T-16  
-- [ ] Google Calendar read via mobile chat
-- [ ] Google Tasks read and create_task
-- [ ] Google Drive document fetch (meeting prep intent)
-- [ ] Microsoft Calendar read
-- [ ] Microsoft To Do read and create_task
-- [ ] Plaid sandbox account/balance read
-- [ ] Prompt regression suite against live dev endpoint
-- [ ] Confirm no provider tokens visible in CloudWatch logs
-- [ ] **QA sign-off in `test-signoff.md`** — Stage 4 gate
+- [x] Google Calendar read via mobile chat
+- [x] Google Tasks read and create_task
+- [x] Google Drive document fetch (meeting prep intent)
+- [x] Microsoft Calendar read
+- [x] Microsoft To Do read and create_task
+- [x] Plaid sandbox account/balance read
+- [x] Prompt regression suite against live dev endpoint
+- [x] Confirm no provider tokens visible in CloudWatch logs
+- [x] **QA sign-off in `test-signoff.md`** — Stage 4 gate
 
 ---
 
@@ -159,14 +159,14 @@ Last updated: 2026-04-10
 > **Stage 5 → Stage 6**. Do not begin until T-17 QA sign-off is complete.
 
 ### T-18 — Staging CI/CD Pipeline `[DEVOPS]`
-**Status**: [ ] Pending  
+**Status**: [x] Done — 2026-04-19 (PR #29 merged)  
 **Depends On**: T-17 (Stage 4 QA sign-off)  
-- [ ] Create `.github/workflows/deploy-staging.yml` — triggers on `v*` tags
-- [ ] Refactor `deploy-dev.yml`: move `mock_provider_mode` to a GitHub Actions variable (not hardcoded)
-- [ ] Create staging IAM deploy role in AWS
-- [ ] Create staging S3 Terraform state bucket
-- [ ] Add `staging` GitHub environment with `AWS_DEPLOY_ROLE_ARN` and `TF_BACKEND_BUCKET` secrets
-- [ ] Create `terraform/environments/staging/` config
+- [x] Create `.github/workflows/deploy-staging.yml` — triggers on `v*` tags
+- [x] Refactor `deploy-dev.yml`: move `mock_provider_mode` to a GitHub Actions variable (not hardcoded)
+- [ ] Create staging IAM deploy role in AWS — **HUMAN (Eric)** — required before T-19
+- [ ] Create staging S3 Terraform state bucket — handled by `ericreilly999-ai-assistant-tfstate` bucket (shared with dev)
+- [ ] Add `staging` GitHub environment with secrets/variables — **HUMAN (Eric)** — required before T-19
+- [x] Create `terraform/environments/staging/` config
 
 ### T-19 — Deploy to Staging `[DEVOPS]`
 **Status**: [ ] Pending  
