@@ -200,7 +200,6 @@ class DynamoDBTokenStoreTests(unittest.TestCase):
         so a lookup for user-A can never return the record written for user-B.
         This test proves that the two key values are distinct strings.
         """
-        tokens_a = {"access_token": "tok-user-a"}
         tokens_b = {"access_token": "tok-user-b"}
 
         # Simulate DynamoDB returning user B's record for user B's key

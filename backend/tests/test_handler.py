@@ -664,8 +664,6 @@ class ExtractUserIdTests(unittest.TestCase):
     def test_two_different_subs_produce_different_key_prefixes(self) -> None:
         """Proves that different sub values lead to different token store key prefixes,
         ensuring one user's tokens can never collide with another user's tokens."""
-        from assistant_app.dev_store import DevTokenStore
-
         sub_alice = "alice-sub-uuid-001"
         sub_bob = "bob-sub-uuid-002"
 
