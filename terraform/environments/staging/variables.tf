@@ -32,6 +32,12 @@ variable "logout_urls" {
   default = []
 }
 
+variable "cognito_domain" {
+  type        = string
+  description = "Cognito hosted UI prefix domain (prefix only, not the full URL)"
+  default     = null
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
