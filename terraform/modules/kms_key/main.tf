@@ -1,4 +1,5 @@
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # CKV2_AWS_64: explicit key policy — denies all if no policy is attached and grants
 # the owning account root full control so that IAM policies can further delegate access.
@@ -22,6 +23,68 @@ data "aws_iam_policy_document" "key_policy" {
 
     actions   = ["kms:*"]
     resources = ["*"]
+  }
+
+  # CloudWatch Logs requires explicit permission in the KMS key policy to create and use
+  # encrypted log groups. IAM identity policies alone are insufficient — the service
+  # principal must be granted directly in the key policy (AWS docs: Encrypt log data in
+  # CloudWatch Logs using AWS KMS). Scoped to the current region and account.
+  statement {
+    sid    = "AllowCloudWatchLogsEncryption"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${data.aws_region.current.name}.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"]
+    }
+  }
+
+  # Secrets Manager and DynamoDB require explicit permission in the KMS key policy to
+  # create and use CMK-encrypted resources. IAM identity policies alone are not sufficient
+  # for cross-service KMS usage when the service acts on behalf of an IAM principal.
+  # Scoped to the current region via the ViaService condition.
+  statement {
+    sid    = "AllowAWSServiceEncryption"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey",
+      "kms:CreateGrant"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values = [
+        "secretsmanager.${data.aws_region.current.name}.amazonaws.com",
+        "dynamodb.${data.aws_region.current.name}.amazonaws.com"
+      ]
+    }
   }
 }
 
