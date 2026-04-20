@@ -55,6 +55,12 @@ variable "kms_key_arn" {
   default     = null
 }
 
+variable "has_kms_key" {
+  type        = bool
+  description = "Set to true when kms_key_arn is provided. Used instead of kms_key_arn != null to avoid Terraform plan-time unknown value errors on fresh environments."
+  default     = false
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

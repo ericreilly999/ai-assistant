@@ -107,6 +107,7 @@ module "lambda" {
   timeout                = 30
   memory_size            = 512
   kms_key_arn            = module.kms.key_arn
+  has_kms_key            = true
   additional_policy_json = data.aws_iam_policy_document.lambda_runtime.json
   has_additional_policy  = true
   environment_variables = {
