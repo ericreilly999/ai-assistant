@@ -89,7 +89,7 @@ resource "aws_lambda_alias" "live" {
 # is an alternative mechanism but is not wired from any environment — this inline policy is the
 # active path.
 resource "aws_iam_role_policy" "kms_decrypt" {
-  count = var.kms_key_arn != null ? 1 : 0
+  count = var.has_kms_key ? 1 : 0
   name  = "${var.function_name}-kms-decrypt"
   role  = aws_iam_role.this.id
 
