@@ -193,8 +193,54 @@
 
 ## Staging Environment
 
-**Status**: ❌ Not yet deployed  
-**Blocked on**: Eric creating staging IAM deploy role (AWS) + `staging` GitHub environment — see workflow-state.md for exact steps
+### Deploy #1 — Initial Staging Infrastructure Deploy
+**Date**: 2026-04-20  
+**Environment**: staging  
+**Triggered by**: Manual `workflow_dispatch` → CI/CD pipeline (`.github/workflows/deploy-staging.yml`)  
+**Deployed by**: GitHub Actions (OIDC → IAM role `ai-assistant-github-actions-deploy-staging`)  
+**Artifact**: Lambda package built from `backend/src/` — Python 3.13  
+**Commit**: `eb177b2` (tag `v1.0.0-rc1` — moved from stale `b460d15` to `eb177b2` before this deploy)  
+**Config**: `MOCK_PROVIDER_MODE=false`  
+**GitHub Actions run**: https://github.com/ericreilly999/ai-assistant/actions/runs/24642946042  
+**Result**: ✅ Success — Terraform apply complete, health check HTTP 200
+
+**Deployed Infrastructure:**
+
+| Resource | Value |
+|---|---|
+| API Gateway Endpoint | `https://5tp3of6iqb.execute-api.us-east-1.amazonaws.com` |
+| API Gateway Stage | `staging` |
+| Lambda Function | `ai-assistant-staging-orchestrator` |
+| Lambda Runtime | Python 3.13 |
+| Lambda Alias | `live` |
+| Cognito User Pool | `us-east-1_2V9K7ZrW4` |
+| Cognito App Client | `3k4bf12066ert5mmstgbvtda7b` |
+| Cognito Hosted UI Domain | `https://ai-assistant-staging.auth.us-east-1.amazoncognito.com` |
+| DynamoDB Token Table | `ai-assistant-staging-tokens` |
+| Secrets Manager (Google) | ✅ Populated — KMS encrypted |
+| Secrets Manager (Microsoft) | ✅ Populated — KMS encrypted |
+| Secrets Manager (Plaid) | ✅ Populated — KMS encrypted |
+| KMS Key | `alias/ai-assistant-staging` (key ID `df8b33be-4b63-4357-8a64-87166aa37edd`) |
+| CloudWatch Alarms | ✅ Active (5 alarms: 4xx-high, 5xx, lambda-duration, lambda-errors, lambda-throttles) |
+
+**Secrets Manager ARNs:**
+
+| Secret Path | ARN | KMS Key |
+|---|---|---|
+| `ai-assistant-staging/google-oauth` | `arn:aws:secretsmanager:us-east-1:290993374431:secret:ai-assistant-staging/google-oauth-FjLKTT` | `alias/ai-assistant-staging` (CMK) |
+| `ai-assistant-staging/microsoft-oauth` | `arn:aws:secretsmanager:us-east-1:290993374431:secret:ai-assistant-staging/microsoft-oauth-4rAxdW` | `alias/ai-assistant-staging` (CMK) |
+| `ai-assistant-staging/plaid` | `arn:aws:secretsmanager:us-east-1:290993374431:secret:ai-assistant-staging/plaid-YellIR` | `alias/ai-assistant-staging` (CMK) |
+
+**Smoke Test**: `GET /staging/health` returned HTTP 200 at `https://5tp3of6iqb.execute-api.us-east-1.amazonaws.com/staging/health`
+
+**Infrastructure fixes applied during this deploy:**
+
+1. `kms_key` Terraform module updated (PR #39): added CloudWatch Logs service principal and Secrets Manager/DynamoDB ViaService condition to KMS key policy so encrypted log groups, secrets, and tables can be created. Applied directly to existing key via `aws kms put-key-policy` as an immediate mitigation.
+2. Staging IAM deploy role `ai-assistant-github-actions-deploy-staging` updated: added `DynamoDB` statement (`CreateTable`, `DeleteTable`, `DescribeTable`, `DescribeContinuousBackups`, etc.), `KMSDataOperations` statement (`Encrypt`, `Decrypt`, `GenerateDataKey`, `ReEncrypt*`), and full CloudWatch Logs delivery permissions (`CreateLogDelivery`, `PutResourcePolicy`, etc.).
+3. Account-level API Gateway CloudWatch Logs role created (`AmazonAPIGatewayPushToCloudWatchLogs`) and set on the API Gateway account — prerequisite for HTTP API v2 access logging.
+4. Real OAuth credentials copied from dev Secrets Manager to staging after Terraform apply (Terraform writes placeholder values; credentials must be populated post-apply).
+
+**Notes**: Staging is now live in live provider mode (`mock_provider_mode=false`). Cognito hosted UI domain provisioned as `ai-assistant-staging`. Next step: T-20 — QA full validation on staging.
 
 ---
 

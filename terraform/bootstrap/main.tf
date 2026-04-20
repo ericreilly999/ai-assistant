@@ -206,6 +206,24 @@ data "aws_iam_policy_document" "deploy_permissions" {
     ]
   }
 
+  # KMS — data operations (Encrypt/Decrypt/GenerateDataKey) required for Terraform
+  # to create and manage KMS-encrypted resources (log groups, secrets, DynamoDB tables).
+  # Management actions (CreateKey, PutKeyPolicy, etc.) are handled by the KMS statement
+  # in the per-environment role policy; this covers the data plane for CI.
+  statement {
+    sid = "KMSDataOperations"
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncryptFrom",
+      "kms:ReEncryptTo",
+      "kms:GenerateDataKey",
+      "kms:GenerateDataKeyWithoutPlaintext",
+      "kms:DescribeKey",
+    ]
+    resources = ["arn:aws:kms:*:${data.aws_caller_identity.current.account_id}:key/*"]
+  }
+
   # CloudWatch
   statement {
     sid = "CloudWatch"
@@ -223,8 +241,37 @@ data "aws_iam_policy_document" "deploy_permissions" {
       "logs:PutRetentionPolicy",
       "logs:TagLogGroup",
       "logs:ListTagsForResource",
+      # Required for API Gateway v2 access logging (CreateStage with access_log_settings)
+      "logs:CreateLogDelivery",
+      "logs:DeleteLogDelivery",
+      "logs:GetLogDelivery",
+      "logs:UpdateLogDelivery",
+      "logs:ListLogDeliveries",
+      "logs:PutResourcePolicy",
+      "logs:DescribeResourcePolicies",
+      # Required for KMS-encrypted log groups
+      "logs:AssociateKmsKey",
+      "logs:DisassociateKmsKey",
     ]
     resources = ["*"]
+  }
+
+  # DynamoDB — required for oauth_token_store module (CreateTable, UpdateTimeToLive, etc.)
+  statement {
+    sid = "DynamoDB"
+    actions = [
+      "dynamodb:CreateTable",
+      "dynamodb:DeleteTable",
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:ListTagsOfResource",
+      "dynamodb:TagResource",
+      "dynamodb:UntagResource",
+      "dynamodb:UpdateTable",
+      "dynamodb:UpdateTimeToLive",
+    ]
+    resources = ["arn:aws:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/ai-assistant-*"]
   }
 
   # Bedrock
